@@ -1,7 +1,7 @@
 #!/bin/bash
 # SDBTT: Simple Database Transfer Tool
 # Enhanced MySQL Database Import Script with Synthwave Theme
-# Version: 1.0.0
+# Version: 1.0.2
 
 # Default configuration
 CONFIG_DIR="$HOME/.sdbtt"
@@ -10,14 +10,77 @@ TEMP_DIR="/tmp/sdbtt_$(date +%Y%m%d_%H%M%S)"
 LOG_DIR="$CONFIG_DIR/logs"
 LOG_FILE="$LOG_DIR/sdbtt_$(date +%Y%m%d_%H%M%S).log"
 PASS_STORE="$CONFIG_DIR/.passstore"
-VERSION="1.0.0"
+VERSION="1.0.2"
 REPO_URL="https://github.com/eraxe/sdbtt"
 
-# Theme settings - CRITICAL FIX for blue screen issue
-# These settings directly modify dialog colors to create a synthwave theme
-# Manually override dialog's blue background to black
-export DIALOGRC="/tmp/dialogrc_sdbtt_$$"
-cat > "$DIALOGRC" << 'EOF'
+# Determine if we can use terminal colors
+if [ -t 1 ]; then
+    USE_COLORS=1
+else
+    USE_COLORS=0
+fi
+
+# Default behavior - can be changed by command line arguments
+DEBUG=0
+USE_DIALOG=1
+
+# Function to output debug messages
+debug_log() {
+    if [ "$DEBUG" -eq 1 ]; then
+        echo "[DEBUG] $1" >&2
+    fi
+}
+
+# We need to ensure these variables are set for the dialog interface
+export TERM=xterm-256color 2>/dev/null
+
+# Ensure COLUMNS is defined for terminal operations
+get_terminal_size() {
+    debug_log "Getting terminal size"
+    
+    # Try different methods to get terminal size
+    if [ -z "$COLUMNS" ]; then
+        if command -v tput > /dev/null 2>&1; then
+            COLUMNS=$(tput cols 2>/dev/null || echo 80)
+        else
+            COLUMNS=80
+        fi
+    fi
+    
+    if [ -z "$LINES" ]; then
+        if command -v tput > /dev/null 2>&1; then
+            LINES=$(tput lines 2>/dev/null || echo 24)
+        else
+            LINES=24
+        fi
+    fi
+    
+    export COLUMNS LINES
+    debug_log "Terminal size: ${COLUMNS}x${LINES}"
+}
+
+# Theme settings - CRITICAL FIX for dialog theme issues
+setup_dialog_theme() {
+    debug_log "Setting up dialog theme"
+    
+    # First verify dialog is available
+    if ! command -v dialog > /dev/null 2>&1; then
+        echo "ERROR: dialog command not found. Please install dialog package." >&2
+        USE_DIALOG=0
+        return 1
+    fi
+    
+    # Try to determine if we can use colors
+    if [ "$USE_COLORS" -eq 0 ]; then
+        debug_log "Terminal doesn't support colors, skipping dialog theme"
+        return 0
+    fi
+    
+    # Create a unique temporary file for this process
+    local dialogrc_file="/tmp/dialogrc_sdbtt_$"
+    
+    # Create the dialog configuration file
+    cat > "$dialogrc_file" << 'EOF'
 # Dialog configuration with Synthwave theme
 # Set aspect-ratio and screen edge
 aspect = 0
@@ -27,86 +90,185 @@ visit_items = OFF
 use_shadow = ON
 use_colors = ON
 
-# Synthwave color scheme
+# Synthwave color scheme - simpler to avoid compatibility issues
 screen_color = (BLACK,BLACK,OFF)
 shadow_color = (BLACK,BLACK,OFF)
 dialog_color = (MAGENTA,BLACK,OFF)
-title_color = (BRIGHTMAGENTA,BLACK,ON)
+title_color = (MAGENTA,BLACK,ON)
 border_color = (MAGENTA,BLACK,ON)
-button_active_color = (BLACK,BRIGHTMAGENTA,ON)
-button_inactive_color = (BLACK,MAGENTA,ON)
-button_key_active_color = (BLACK,BRIGHTMAGENTA,ON)
-button_key_inactive_color = (BLACK,MAGENTA,ON)
-button_label_active_color = (BLACK,BRIGHTMAGENTA,ON)
-button_label_inactive_color = (BLACK,MAGENTA,ON)
+button_active_color = (BLACK,MAGENTA,ON)
+button_inactive_color = (BLACK,MAGENTA,OFF)
+button_key_active_color = (BLACK,MAGENTA,ON)
+button_key_inactive_color = (BLACK,MAGENTA,OFF)
+button_label_active_color = (BLACK,MAGENTA,ON)
+button_label_inactive_color = (BLACK,MAGENTA,OFF)
 inputbox_color = (MAGENTA,BLACK,OFF)
 inputbox_border_color = (MAGENTA,BLACK,ON)
 searchbox_color = (MAGENTA,BLACK,OFF)
-searchbox_title_color = (BRIGHTMAGENTA,BLACK,ON)
+searchbox_title_color = (MAGENTA,BLACK,ON)
 searchbox_border_color = (MAGENTA,BLACK,ON)
-position_indicator_color = (BRIGHTMAGENTA,BLACK,ON)
+position_indicator_color = (MAGENTA,BLACK,ON)
 menubox_color = (MAGENTA,BLACK,OFF)
 menubox_border_color = (MAGENTA,BLACK,ON)
 item_color = (MAGENTA,BLACK,OFF)
 item_selected_color = (BLACK,MAGENTA,ON)
-tag_color = (BRIGHTMAGENTA,BLACK,ON)
-tag_selected_color = (BLACK,BRIGHTMAGENTA,ON)
-tag_key_color = (BRIGHTMAGENTA,BLACK,ON)
-tag_key_selected_color = (BLACK,BRIGHTMAGENTA,ON)
+tag_color = (MAGENTA,BLACK,ON)
+tag_selected_color = (BLACK,MAGENTA,ON)
+tag_key_color = (MAGENTA,BLACK,ON)
+tag_key_selected_color = (BLACK,MAGENTA,ON)
 check_color = (MAGENTA,BLACK,OFF)
 check_selected_color = (BLACK,MAGENTA,ON)
-uarrow_color = (BRIGHTMAGENTA,BLACK,ON)
-darrow_color = (BRIGHTMAGENTA,BLACK,ON)
+uarrow_color = (MAGENTA,BLACK,ON)
+darrow_color = (MAGENTA,BLACK,ON)
 itemhelp_color = (MAGENTA,BLACK,OFF)
 form_active_text_color = (BLACK,MAGENTA,ON)
 form_text_color = (MAGENTA,BLACK,ON)
 form_item_readonly_color = (CYAN,BLACK,ON)
-gauge_color = (BRIGHTMAGENTA,BLACK,ON)
+gauge_color = (MAGENTA,BLACK,ON)
 EOF
 
+    # Set permissions
+    chmod 644 "$dialogrc_file"
+    
+    # Export the environment variable
+    export DIALOGRC="$dialogrc_file"
+    
+    # Verify the file exists and is readable
+    if [ ! -f "$DIALOGRC" ] || [ ! -r "$DIALOGRC" ]; then
+        echo "ERROR: Failed to create or access dialog configuration at $DIALOGRC" >&2
+        unset DIALOGRC
+        return 1
+    fi
+    
+    debug_log "Dialog theme configured at $DIALOGRC"
+    return 0
+}
+
 # ANSI color codes for terminal output
-RESET="\033[0m"
-BOLD="\033[1m"
-BLACK="\033[30m"
-RED="\033[31m"
-GREEN="\033[32m"
-YELLOW="\033[33m"
-BLUE="\033[34m"
-MAGENTA="\033[35m"
-CYAN="\033[36m"
-WHITE="\033[37m"
-BRIGHTBLACK="\033[90m"
-BRIGHTRED="\033[91m"
-BRIGHTGREEN="\033[92m"
-BRIGHTYELLOW="\033[93m"
-BRIGHTBLUE="\033[94m"
-BRIGHTMAGENTA="\033[95m"
-BRIGHTCYAN="\033[96m"
-BRIGHTWHITE="\033[97m"
-BGBLACK="\033[40m"
-BGMAGENTA="\033[45m"
+if [ "$USE_COLORS" -eq 1 ]; then
+    RESET="\033[0m"
+    BOLD="\033[1m"
+    BLACK="\033[30m"
+    RED="\033[31m"
+    GREEN="\033[32m"
+    YELLOW="\033[33m"
+    BLUE="\033[34m"
+    MAGENTA="\033[35m"
+    CYAN="\033[36m"
+    WHITE="\033[37m"
+    BRIGHTBLACK="\033[90m"
+    BRIGHTRED="\033[91m"
+    BRIGHTGREEN="\033[92m"
+    BRIGHTYELLOW="\033[93m"
+    BRIGHTBLUE="\033[94m"
+    BRIGHTMAGENTA="\033[95m"
+    BRIGHTCYAN="\033[96m"
+    BRIGHTWHITE="\033[97m"
+    BGBLACK="\033[40m"
+    BGMAGENTA="\033[45m"
+else
+    # No colors in non-interactive mode or terminals without color support
+    RESET=""
+    BOLD=""
+    BLACK=""
+    RED=""
+    GREEN=""
+    YELLOW=""
+    BLUE=""
+    MAGENTA=""
+    CYAN=""
+    WHITE=""
+    BRIGHTBLACK=""
+    BRIGHTRED=""
+    BRIGHTGREEN=""
+    BRIGHTYELLOW=""
+    BRIGHTBLUE=""
+    BRIGHTMAGENTA=""
+    BRIGHTCYAN=""
+    BRIGHTWHITE=""
+    BGBLACK=""
+    BGMAGENTA=""
+fi
+
+# Verify dialog works properly
+check_dialog() {
+    debug_log "Checking if dialog works properly"
+    
+    # Only do this check if we're using dialog
+    if [ "$USE_DIALOG" -eq 0 ]; then
+        debug_log "Dialog disabled, skipping check"
+        return 1
+    fi
+    
+    # Try a simple dialog command
+    if ! command -v dialog >/dev/null 2>&1; then
+        echo "ERROR: Dialog command not found" >&2
+        USE_DIALOG=0
+        return 1
+    fi
+    
+    # Test a simple dialog output using a non-UI function
+    if ! dialog --print-version >/dev/null 2>&1; then
+        echo "ERROR: Dialog not working properly" >&2
+        USE_DIALOG=0
+        return 1
+    fi
+    
+    # Verify we can actually create a dialog box
+    # Create a test file to capture output
+    local test_output="/tmp/dialog_test_$"
+    if ! dialog --clear --title "SDBTT Test" --yesno "Dialog is working!" 7 40 2>"$test_output"; then
+        local dialog_exit=$?
+        if [ $dialog_exit -ne 0 ] && [ $dialog_exit -ne 1 ]; then  # 0 = yes, 1 = no, anything else = error
+            echo "ERROR: Dialog UI not working properly (exit code $dialog_exit)" >&2
+            cat "$test_output" >&2
+            rm -f "$test_output"
+            USE_DIALOG=0
+            return 1
+        fi
+    fi
+    rm -f "$test_output"
+    
+    debug_log "Dialog check completed successfully"
+    return 0
+}
 
 # Function to set terminal title and background
 set_term_appearance() {
-    # Try to set terminal title
-    echo -ne "\033]0;SDBTT - Synthwave\007"
+    debug_log "Setting terminal appearance"
     
-    # Clear screen with magenta/black gradient effect
-    clear
-    for i in {1..5}; do
-        echo -e "${BGBLACK}${MAGENTA}$(printf '%*s' $COLUMNS | tr ' ' '═')${RESET}"
-    done
-    echo -e "${BGBLACK}${BRIGHTMAGENTA}$(printf '%*s' $COLUMNS | tr ' ' '═')${RESET}"
-    for i in {1..20}; do
-        echo -e "${BGBLACK}$(printf '%*s' $COLUMNS)${RESET}"
-    done
+    # Get terminal size
+    get_terminal_size
     
-    # Return cursor to top
-    tput cup 0 0
+    # Only perform these operations if we're in a terminal that supports colors
+    if [ "$USE_COLORS" -eq 1 ]; then
+        # Try to set terminal title
+        echo -ne "\033]0;SDBTT - Synthwave\007"
+        
+        # Clear screen with magenta/black gradient effect
+        clear
+        for i in {1..3}; do
+            echo -e "${BGBLACK}${MAGENTA}$(printf '%*s' ${COLUMNS} | tr ' ' '═')${RESET}"
+        done
+        echo -e "${BGBLACK}${MAGENTA}$(printf '%*s' ${COLUMNS} | tr ' ' '═')${RESET}"
+        for i in {1..10}; do
+            echo -e "${BGBLACK}$(printf '%*s' ${COLUMNS})${RESET}"
+        done
+        
+        # Return cursor to top
+        tput cup 0 0 2>/dev/null || true
+    else
+        # Simple fallback for terminals without color support
+        clear
+    fi
+    
+    debug_log "Terminal appearance set"
 }
 
 # Ensure required tools are installed
 check_dependencies() {
+    debug_log "Checking dependencies"
+    
     local missing_deps=()
     
     for cmd in dialog mysql mysqldump sed awk git openssl; do
@@ -120,16 +282,23 @@ check_dependencies() {
         echo "Please install them before running this script."
         exit 1
     fi
+    
+    debug_log "All dependencies found"
 }
 
 # Display fancy ASCII art header
 show_header() {
-    # Return cursor to top
-    tput cup 0 0
+    debug_log "Showing header"
+    
+    # Return cursor to top (if possible)
+    if command -v tput > /dev/null 2>&1; then
+        tput cup 0 0 2>/dev/null || true
+    fi
     
     # Using ANSI color codes for terminal 
-    echo -e "${BRIGHTMAGENTA}"
-    cat << "EOF"
+    if [ "$USE_COLORS" -eq 1 ]; then
+        echo -e "${MAGENTA}"
+        cat << "EOF"
  ██████╗██████╗ ██████╗ ████████╗████████╗
 ██╔════╝██╔══██╗██╔══██╗╚══██╔══╝╚══██╔══╝
 ╚█████╗ ██║  ██║██████╔╝   ██║      ██║   
@@ -137,16 +306,31 @@ show_header() {
 ██████╔╝██████╔╝██████╔╝   ██║      ██║   
 ╚═════╝ ╚═════╝ ╚═════╝    ╚═╝      ╚═╝   
 EOF
-    echo -e "${MAGENTA}░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░"
-    echo -e "${BRIGHTMAGENTA}Simple Database Transfer Tool v$VERSION${RESET}"
-    echo -e "${MAGENTA}░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░${RESET}"
+        echo -e "${MAGENTA}░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░"
+        echo -e "${MAGENTA}Simple Database Transfer Tool v$VERSION${RESET}"
+        echo -e "${MAGENTA}░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░${RESET}"
+    else
+        # Plain text version for terminals without color support
+        cat << EOF
+==================================================
+           SDBTT: Simple Database Transfer Tool
+                     Version $VERSION
+==================================================
+EOF
+    fi
+    
+    debug_log "Header displayed"
 }
 
 # Create required directories
 initialize_directories() {
+    debug_log "Initializing directories"
+    
     mkdir -p "$CONFIG_DIR" "$LOG_DIR" "$TEMP_DIR"
     # Secure the configuration directory
     chmod 700 "$CONFIG_DIR"
+    
+    debug_log "Directories initialized"
 }
 
 # Function to log messages
@@ -159,7 +343,7 @@ log_message() {
 # Function to handle errors
 error_exit() {
     log_message "ERROR: $1"
-    if [ -n "$DIALOG" ]; then
+    if command -v dialog &>/dev/null && [ -f "$DIALOGRC" ]; then
         dialog --title "Error" --colors --msgbox "\Z1ERROR: $1\Z0" 8 60
     else
         echo -e "${RED}ERROR: $1${RESET}" >&2
@@ -665,6 +849,8 @@ show_mysql_status() {
 show_main_menu() {
     local choice
     
+    debug_log "Displaying main menu"
+    
     while true; do
         choice=$(dialog --colors --clear --backtitle "\Z5SDBTT - Simple Database Transfer Tool v$VERSION\Z0" \
             --title "Main Menu" --menu "Choose an option:" 17 60 10 \
@@ -679,6 +865,8 @@ show_main_menu() {
             "9" "\Z6Help\Z0" \
             "0" "\Z1Exit\Z0" \
             3>&1 1>&2 2>&3)
+            
+        debug_log "Menu choice: $choice"
             
         case $choice in
             1) import_databases_menu ;;
@@ -1404,6 +1592,10 @@ When run without options, launches the interactive TUI.
 EOF
             exit 0
             ;;
+        --debug)
+            DEBUG=1
+            debug_log "Debug mode enabled"
+            ;;
     esac
 }
 
@@ -1411,12 +1603,39 @@ EOF
 main() {
     # Process command line arguments if any
     if [ $# -gt 0 ]; then
-        process_arguments "$1"
+        process_arguments "$@"
     fi
     
+    # Check dependencies before proceeding
     check_dependencies
+    
+    # Get terminal size information
+    get_terminal_size
+    
+    # Setup terminal appearance first (simple clearing)
+    clear
+    
+    if [ "$USE_DIALOG" -eq 1 ]; then
+        # Setup dialog theme 
+        if ! setup_dialog_theme; then
+            debug_log "Dialog theme setup failed, falling back to console mode"
+            USE_DIALOG=0
+        fi
+        
+        # Check if dialog works
+        if ! check_dialog; then
+            debug_log "Dialog check failed, falling back to console mode"
+            USE_DIALOG=0
+        fi
+    fi
+    
+    # Set up the complete terminal appearance with colors if available
     set_term_appearance
+    
+    # Show the header
     show_header
+    
+    # Create required directories
     initialize_directories
     
     # Set default values if not loaded from config
@@ -1431,11 +1650,84 @@ main() {
         MYSQL_PASS=$(get_password "$MYSQL_USER")
     fi
     
+    # Simple test to verify dialog is working
+    if [ "$USE_DIALOG" -eq 1 ]; then
+        debug_log "Testing dialog with simple message box"
+        if ! dialog --clear --title "SDBTT Ready" --msgbox "Welcome to SDBTT!\n\nPress OK to continue to main menu." 8 50 2>/dev/null; then
+            debug_log "Dialog test failed, falling back to console mode"
+            USE_DIALOG=0
+            echo "Dialog interface not working properly, falling back to console mode." >&2
+            echo "Press Enter to continue..." >&2
+            read
+        fi
+    fi
+    
     # Show main menu
-    show_main_menu
+    if [ "$USE_DIALOG" -eq 1 ]; then
+        show_main_menu
+    else
+        echo "Console mode not implemented in this version." >&2
+        echo "Please install dialog or fix terminal settings to use SDBTT." >&2
+        exit 1
+    fi
     
     # Clean up on exit
-    rm -f "$DIALOGRC"
+    if [ -n "$DIALOGRC" ] && [ -f "$DIALOGRC" ]; then
+        rm -f "$DIALOGRC"
+    fi
+    
+    debug_log "SDBTT exiting normally"
+}
+
+# Process command line arguments
+process_arguments() {
+    for arg in "$@"; do
+        case "$arg" in
+            --install)
+                install_script
+                exit $?
+                ;;
+            --update)
+                update_script
+                exit $?
+                ;;
+            --remove)
+                remove_script
+                exit $?
+                ;;
+            --help)
+                show_header
+                cat << EOF
+SDBTT: Simple Database Transfer Tool
+Usage: $(basename "$0") [OPTION]
+
+Options:
+  --install       Install SDBTT to system
+  --update        Update SDBTT from GitHub
+  --remove        Remove SDBTT from system
+  --help          Show this help message
+  --debug         Enable debug logging
+  --no-dialog     Disable dialog UI (use console mode)
+  --no-color      Disable colored output
+
+When run without options, launches the interactive TUI.
+EOF
+                exit 0
+                ;;
+            --debug)
+                DEBUG=1
+                debug_log "Debug mode enabled"
+                ;;
+            --no-dialog)
+                USE_DIALOG=0
+                debug_log "Dialog UI disabled"
+                ;;
+            --no-color)
+                USE_COLORS=0
+                debug_log "Colors disabled"
+                ;;
+        esac
+    done
 }
 
 # Start the script
