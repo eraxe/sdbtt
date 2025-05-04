@@ -1,7 +1,7 @@
 #!/bin/bash
 # SDBTT: Simple Database Transfer Tool
 # Enhanced MySQL Database Import Script with Synthwave Theme
-# Version: 1.0.2
+# Version: 1.0.3
 
 # Default configuration
 CONFIG_DIR="$HOME/.sdbtt"
@@ -9,8 +9,9 @@ CONFIG_FILE="$CONFIG_DIR/config.conf"
 TEMP_DIR="/tmp/sdbtt_$(date +%Y%m%d_%H%M%S)"
 LOG_DIR="$CONFIG_DIR/logs"
 LOG_FILE="$LOG_DIR/sdbtt_$(date +%Y%m%d_%H%M%S).log"
+DISPLAY_LOG_FILE="/tmp/sdbtt_display_log_$(date +%Y%m%d_%H%M%S)"
 PASS_STORE="$CONFIG_DIR/.passstore"
-VERSION="1.0.2"
+VERSION="1.0.3"
 REPO_URL="https://github.com/eraxe/sdbtt"
 
 # Determine if we can use terminal colors
@@ -59,7 +60,7 @@ get_terminal_size() {
     debug_log "Terminal size: ${COLUMNS}x${LINES}"
 }
 
-# Theme settings - CRITICAL FIX for dialog theme issues
+# Enhanced theme settings with more synthwave colors
 setup_dialog_theme() {
     debug_log "Setting up dialog theme"
     
@@ -79,7 +80,8 @@ setup_dialog_theme() {
     # Create a unique temporary file for this process
     local dialogrc_file="/tmp/dialogrc_sdbtt_$"
     
-    # Create the dialog configuration file
+    # Create the dialog configuration file with simplified synthwave colors
+    # Using more compatible dialog theme settings
     cat > "$dialogrc_file" << 'EOF'
 # Dialog configuration with Synthwave theme
 # Set aspect-ratio and screen edge
@@ -90,18 +92,18 @@ visit_items = OFF
 use_shadow = ON
 use_colors = ON
 
-# Synthwave color scheme - simpler to avoid compatibility issues
+# Simplified Synthwave color scheme for better compatibility
 screen_color = (BLACK,BLACK,OFF)
 shadow_color = (BLACK,BLACK,OFF)
 dialog_color = (MAGENTA,BLACK,OFF)
 title_color = (MAGENTA,BLACK,ON)
 border_color = (MAGENTA,BLACK,ON)
 button_active_color = (BLACK,MAGENTA,ON)
-button_inactive_color = (BLACK,MAGENTA,OFF)
+button_inactive_color = (MAGENTA,BLACK,OFF)
 button_key_active_color = (BLACK,MAGENTA,ON)
-button_key_inactive_color = (BLACK,MAGENTA,OFF)
+button_key_inactive_color = (MAGENTA,BLACK,OFF)
 button_label_active_color = (BLACK,MAGENTA,ON)
-button_label_inactive_color = (BLACK,MAGENTA,OFF)
+button_label_inactive_color = (MAGENTA,BLACK,OFF)
 inputbox_color = (MAGENTA,BLACK,OFF)
 inputbox_border_color = (MAGENTA,BLACK,ON)
 searchbox_color = (MAGENTA,BLACK,OFF)
@@ -144,7 +146,7 @@ EOF
     return 0
 }
 
-# ANSI color codes for terminal output
+# Simplified ANSI color codes for better compatibility
 if [ "$USE_COLORS" -eq 1 ]; then
     RESET="\033[0m"
     BOLD="\033[1m"
@@ -156,14 +158,9 @@ if [ "$USE_COLORS" -eq 1 ]; then
     MAGENTA="\033[35m"
     CYAN="\033[36m"
     WHITE="\033[37m"
-    BRIGHTBLACK="\033[90m"
-    BRIGHTRED="\033[91m"
-    BRIGHTGREEN="\033[92m"
-    BRIGHTYELLOW="\033[93m"
-    BRIGHTBLUE="\033[94m"
+    # Limit bright colors to essential ones
     BRIGHTMAGENTA="\033[95m"
     BRIGHTCYAN="\033[96m"
-    BRIGHTWHITE="\033[97m"
     BGBLACK="\033[40m"
     BGMAGENTA="\033[45m"
 else
@@ -187,10 +184,33 @@ else
     BRIGHTCYAN=""
     BRIGHTWHITE=""
     BGBLACK=""
+    BGRED=""
+    BGGREEN=""
+    BGYELLOW=""
+    BGBLUE=""
     BGMAGENTA=""
+    BGCYAN=""
+    BGWHITE=""
+    BGBRIGHTBLACK=""
+    BGBRIGHTRED=""
+    BGBRIGHTGREEN=""
+    BGBRIGHTYELLOW=""
+    BGBRIGHTBLUE=""
+    BGBRIGHTMAGENTA=""
+    BGBRIGHTCYAN=""
+    BGBRIGHTWHITE=""
 fi
 
-# Verify dialog works properly
+# Simplified color presets for better compatibility
+SYN_PRIMARY="${MAGENTA}"
+SYN_SECONDARY="${CYAN}"
+SYN_ALERT="${RED}"
+SYN_SUCCESS="${GREEN}"
+SYN_WARNING="${YELLOW}"
+SYN_BG="${BGBLACK}"
+SYN_HEADER="${MAGENTA}${BOLD}"
+
+# Verify dialog works properly - simplified with better error handling 
 check_dialog() {
     debug_log "Checking if dialog works properly"
     
@@ -200,40 +220,26 @@ check_dialog() {
         return 1
     fi
     
-    # Try a simple dialog command
+    # Check for dialog command
     if ! command -v dialog >/dev/null 2>&1; then
         echo "ERROR: Dialog command not found" >&2
         USE_DIALOG=0
         return 1
     fi
     
-    # Test a simple dialog output using a non-UI function
+    # Test dialog functionality quietly without creating any windows
     if ! dialog --print-version >/dev/null 2>&1; then
         echo "ERROR: Dialog not working properly" >&2
         USE_DIALOG=0
         return 1
     fi
     
-    # Verify we can actually create a dialog box
-    # Create a test file to capture output
-    local test_output="/tmp/dialog_test_$"
-    if ! dialog --clear --title "SDBTT Test" --yesno "Dialog is working!" 7 40 2>"$test_output"; then
-        local dialog_exit=$?
-        if [ $dialog_exit -ne 0 ] && [ $dialog_exit -ne 1 ]; then  # 0 = yes, 1 = no, anything else = error
-            echo "ERROR: Dialog UI not working properly (exit code $dialog_exit)" >&2
-            cat "$test_output" >&2
-            rm -f "$test_output"
-            USE_DIALOG=0
-            return 1
-        fi
-    fi
-    rm -f "$test_output"
-    
-    debug_log "Dialog check completed successfully"
+    # Skip interactive checks to avoid issues
+    debug_log "Dialog basic check passed"
     return 0
 }
 
-# Function to set terminal title and background
+# Function to set terminal title and background - simplified for better compatibility
 set_term_appearance() {
     debug_log "Setting terminal appearance"
     
@@ -242,16 +248,16 @@ set_term_appearance() {
     
     # Only perform these operations if we're in a terminal that supports colors
     if [ "$USE_COLORS" -eq 1 ]; then
-        # Try to set terminal title
+        # Set terminal title
         echo -ne "\033]0;SDBTT - Synthwave\007"
         
-        # Clear screen with magenta/black gradient effect
+        # Simple clear with basic synthwave effect
         clear
-        for i in {1..3}; do
-            echo -e "${BGBLACK}${MAGENTA}$(printf '%*s' ${COLUMNS} | tr ' ' '═')${RESET}"
-        done
+        # Top border
         echo -e "${BGBLACK}${MAGENTA}$(printf '%*s' ${COLUMNS} | tr ' ' '═')${RESET}"
-        for i in {1..10}; do
+        
+        # Empty space with black background
+        for i in {1..3}; do
             echo -e "${BGBLACK}$(printf '%*s' ${COLUMNS})${RESET}"
         done
         
@@ -271,14 +277,14 @@ check_dependencies() {
     
     local missing_deps=()
     
-    for cmd in dialog mysql mysqldump sed awk git openssl; do
+    for cmd in dialog mysql mysqldump sed awk git openssl curl; do
         if ! command -v "$cmd" &> /dev/null; then
             missing_deps+=("$cmd")
         fi
     done
     
     if [ ${#missing_deps[@]} -ne 0 ]; then
-        echo -e "${RED}Error: Missing required dependencies: ${missing_deps[*]}${RESET}"
+        echo -e "${SYN_ALERT}Error: Missing required dependencies: ${missing_deps[*]}${RESET}"
         echo "Please install them before running this script."
         exit 1
     fi
@@ -286,7 +292,7 @@ check_dependencies() {
     debug_log "All dependencies found"
 }
 
-# Display fancy ASCII art header
+# Display fancy ASCII art header with enhanced colors
 show_header() {
     debug_log "Showing header"
     
@@ -295,9 +301,9 @@ show_header() {
         tput cup 0 0 2>/dev/null || true
     fi
     
-    # Using ANSI color codes for terminal 
+    # Using enhanced synthwave colors
     if [ "$USE_COLORS" -eq 1 ]; then
-        echo -e "${MAGENTA}"
+        echo -e "${SYN_HEADER}"
         cat << "EOF"
  ██████╗██████╗ ██████╗ ████████╗████████╗
 ██╔════╝██╔══██╗██╔══██╗╚══██╔══╝╚══██╔══╝
@@ -306,9 +312,9 @@ show_header() {
 ██████╔╝██████╔╝██████╔╝   ██║      ██║   
 ╚═════╝ ╚═════╝ ╚═════╝    ╚═╝      ╚═╝   
 EOF
-        echo -e "${MAGENTA}░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░"
-        echo -e "${MAGENTA}Simple Database Transfer Tool v$VERSION${RESET}"
-        echo -e "${MAGENTA}░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒░${RESET}"
+        echo -e "${BRIGHTMAGENTA}░▒▓${MAGENTA}█${BRIGHTCYAN}▓▒░${BRIGHTMAGENTA}░▒▓${MAGENTA}█${BRIGHTCYAN}▓▒░${BRIGHTMAGENTA}░▒▓${MAGENTA}█${BRIGHTCYAN}▓▒░${BRIGHTMAGENTA}░▒▓${MAGENTA}█${BRIGHTCYAN}▓▒░"
+        echo -e "${SYN_HEADER}Simple Database Transfer Tool v$VERSION${RESET}"
+        echo -e "${BRIGHTCYAN}░▒▓${CYAN}█${BRIGHTMAGENTA}▓▒░${BRIGHTCYAN}░▒▓${CYAN}█${BRIGHTMAGENTA}▓▒░${BRIGHTCYAN}░▒▓${CYAN}█${BRIGHTMAGENTA}▓▒░${BRIGHTCYAN}░▒▓${CYAN}█${BRIGHTMAGENTA}▓▒░${RESET}"
     else
         # Plain text version for terminals without color support
         cat << EOF
@@ -333,20 +339,27 @@ initialize_directories() {
     debug_log "Directories initialized"
 }
 
-# Function to log messages
+# Function to log messages - enhanced to also display to active log screen
 log_message() {
     local message="$1"
     local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
-    echo "[$timestamp] $message" | tee -a "$LOG_FILE"
+    
+    # Write to main log file
+    echo "[$timestamp] $message" >> "$LOG_FILE"
+    
+    # If we have an active display log file, write to it too
+    if [ -f "$DISPLAY_LOG_FILE" ]; then
+        echo "[$timestamp] $message" >> "$DISPLAY_LOG_FILE"
+    fi
 }
 
-# Function to handle errors
+# Function to handle errors with themed error messages
 error_exit() {
     log_message "ERROR: $1"
     if command -v dialog &>/dev/null && [ -f "$DIALOGRC" ]; then
         dialog --title "Error" --colors --msgbox "\Z1ERROR: $1\Z0" 8 60
     else
-        echo -e "${RED}ERROR: $1${RESET}" >&2
+        echo -e "${SYN_ALERT}ERROR: $1${RESET}" >&2
     fi
     exit 1
 }
@@ -446,81 +459,155 @@ EOF
     return 0
 }
 
-# Update the script from GitHub
+# Enhanced update function with better UI feedback
 update_script() {
     local temp_dir="/tmp/sdbtt_update_$(date +%s)"
     local current_dir=$(pwd)
+    local update_log="$temp_dir/update.log"
     
-    dialog --colors --title "Update" --infobox "\Z5Checking for updates from $REPO_URL..." 5 60
-    
-    # Create temp directory
+    # Create the update log file with timestamp
     mkdir -p "$temp_dir"
-    cd "$temp_dir" || return 1
+    echo "[$(date)] Starting update process..." > "$update_log"
     
-    # Clone the repository
-    if ! git clone "$REPO_URL" . >/dev/null 2>&1; then
-        dialog --colors --title "Update Failed" --msgbox "\Z1Failed to clone repository. Check your internet connection and try again." 8 60
-        rm -rf "$temp_dir"
-        cd "$current_dir" || return 1
-        return 1
-    fi
+    # Create a tailbox for live update progress
+    dialog --colors --title "Update Process" --begin 3 10 --tailbox "$update_log" 15 70 &
+    local dialog_pid=$!
     
-    # Check if there's a newer version
-    if [ -f "VERSION" ]; then
-        REPO_VERSION=$(cat VERSION)
-    else
-        REPO_VERSION=$(grep "^VERSION=" sdbtt | cut -d'"' -f2)
-    fi
-    
-    if [ -z "$REPO_VERSION" ]; then
-        dialog --colors --title "Update Failed" --msgbox "\Z1Could not determine repository version." 8 60
-        rm -rf "$temp_dir"
-        cd "$current_dir" || return 1
-        return 1
-    fi
-    
-    # Compare versions
-    if [ "$VERSION" = "$REPO_VERSION" ]; then
-        dialog --colors --title "No Updates" --msgbox "\Z5Your version ($VERSION) is already up to date." 8 60
-        rm -rf "$temp_dir"
-        cd "$current_dir" || return 1
-        return 0
-    fi
-    
-    # Confirm update
-    dialog --colors --title "Update Available" --yesno "\Z5A new version is available.\n\nCurrent version: $VERSION\nNew version: $REPO_VERSION\n\nDo you want to update?" 10 60
-    
-    if [ $? -eq 0 ]; then
-        # If installed as system script, use sudo
-        if [ -f "/usr/local/bin/sdbtt" ]; then
-            if [ "$(id -u)" -ne 0 ]; then
-                dialog --colors --title "Error" --msgbox "\Z1Update requires root privileges. Please run with sudo." 8 60
-                rm -rf "$temp_dir"
-                cd "$current_dir" || return 1
-                return 1
-            fi
-            
-            # Update system installation
-            cp "sdbtt" "/usr/local/bin/sdbtt"
-            chmod 755 "/usr/local/bin/sdbtt"
-        else
-            # Update current script
-            cp "sdbtt" "$0"
-            chmod 755 "$0"
+    # Clone the repository in background and log process
+    {
+        echo "[$(date)] Checking for updates from $REPO_URL..." >> "$update_log"
+        
+        cd "$temp_dir" || {
+            echo "[$(date)] ERROR: Failed to create temporary directory" >> "$update_log"
+            sleep 2
+            kill $dialog_pid 2>/dev/null
+            return 1
+        }
+        
+        echo "[$(date)] Cloning repository..." >> "$update_log"
+        if ! git clone "$REPO_URL" . >>$update_log 2>&1; then
+            echo "[$(date)] ERROR: Failed to clone repository. Check your internet connection and try again." >> "$update_log"
+            sleep 3
+            kill $dialog_pid 2>/dev/null
+            cd "$current_dir" || true
+            dialog --colors --title "Update Failed" --msgbox "\Z1Failed to clone repository. Check your internet connection and try again." 8 60
+            rm -rf "$temp_dir"
+            return 1
         fi
         
-        dialog --colors --title "Update Successful" --msgbox "\Z5Updated from version $VERSION to $REPO_VERSION.\n\nPlease restart the script for changes to take effect." 10 60
+        # Check if there's a newer version
+        echo "[$(date)] Checking version information..." >> "$update_log"
+        if [ -f "VERSION" ]; then
+            REPO_VERSION=$(cat VERSION)
+            echo "[$(date)] Found explicit VERSION file: $REPO_VERSION" >> "$update_log"
+        else
+            REPO_VERSION=$(grep "^VERSION=" sdbtt | cut -d'"' -f2)
+            echo "[$(date)] Extracted version from script: $REPO_VERSION" >> "$update_log"
+        fi
         
-        # Cleanup and exit
-        rm -rf "$temp_dir"
-        cd "$current_dir" || return 1
-        exit 0
-    else
-        dialog --colors --title "Update Cancelled" --msgbox "\Z5Update cancelled. Keeping version $VERSION." 8 60
-        rm -rf "$temp_dir"
-        cd "$current_dir" || return 1
-        return 0
-    fi
+        if [ -z "$REPO_VERSION" ]; then
+            echo "[$(date)] ERROR: Could not determine repository version." >> "$update_log"
+            sleep 2
+            kill $dialog_pid 2>/dev/null
+            cd "$current_dir" || true
+            dialog --colors --title "Update Failed" --msgbox "\Z1Could not determine repository version." 8 60
+            rm -rf "$temp_dir"
+            return 1
+        fi
+        
+        # Compare versions
+        echo "[$(date)] Comparing versions - Current: $VERSION, Repository: $REPO_VERSION" >> "$update_log"
+        
+        if [ "$VERSION" = "$REPO_VERSION" ]; then
+            echo "[$(date)] Your version ($VERSION) is already up to date." >> "$update_log"
+            sleep 2
+            kill $dialog_pid 2>/dev/null
+            cd "$current_dir" || true
+            dialog --colors --title "No Updates" --msgbox "\Z5Your version ($VERSION) is already up to date." 8 60
+            rm -rf "$temp_dir"
+            return 0
+        fi
+        
+        # Kill tailbox before asking for confirmation
+        sleep 1
+        kill $dialog_pid 2>/dev/null
+        
+        # Confirm update
+        dialog --colors --title "Update Available" --yesno "\Z5A new version is available.\n\nCurrent version: $VERSION\nNew version: $REPO_VERSION\n\nDo you want to update?" 10 60
+        
+        if [ $? -eq 0 ]; then
+            # Use simpler display during update to avoid dialog issues
+            echo "[$(date)] User confirmed update. Proceeding with installation..." > "$update_log"
+            echo "Installing update, please wait..."
+            
+            # Update the script
+            echo "[$(date)] Checking installation method..." >> "$update_log"
+            if [ -f "/usr/local/bin/sdbtt" ]; then
+                echo "[$(date)] Detected system installation." >> "$update_log"
+                if [ "$(id -u)" -ne 0 ]; then
+                    echo "[$(date)] ERROR: Update requires root privileges for system installation." >> "$update_log"
+                    cd "$current_dir" || true
+                    dialog --title "Error" --msgbox "Update requires root privileges. Please run with sudo." 8 60
+                    rm -rf "$temp_dir"
+                    return 1
+                fi
+                
+                echo "[$(date)] Updating system installation..." >> "$update_log"
+                cp "sdbtt" "/usr/local/bin/sdbtt" >> "$update_log" 2>&1
+                chmod 755 "/usr/local/bin/sdbtt" >> "$update_log" 2>&1
+                echo "[$(date)] System installation updated successfully." >> "$update_log"
+            else
+                echo "[$(date)] Updating current script..." >> "$update_log"
+                cp "sdbtt" "$0" >> "$update_log" 2>&1
+                chmod 755 "$0" >> "$update_log" 2>&1
+                echo "[$(date)] Script updated successfully." >> "$update_log"
+            fi
+            
+            # Update changelog information
+            if [ -f "CHANGELOG.md" ]; then
+                echo "[$(date)] Found changelog file. Extracting changes..." >> "$update_log"
+                echo "[$(date)] Changes in version $REPO_VERSION:" >> "$update_log"
+                grep -A 10 "## \[$REPO_VERSION\]" "CHANGELOG.md" >> "$update_log" 2>/dev/null || echo "No detailed changelog found for this version." >> "$update_log"
+            else
+                echo "[$(date)] No changelog found." >> "$update_log"
+            fi
+            
+            sleep 2
+            kill $install_dialog_pid 2>/dev/null
+            
+            # Extract a simple changelog to show to the user
+            local changelog=""
+            if [ -f "CHANGELOG.md" ]; then
+                changelog=$(grep -A 10 "## \[$REPO_VERSION\]" "CHANGELOG.md" 2>/dev/null)
+            fi
+            
+            if [ -n "$changelog" ]; then
+                dialog --colors --title "Update Successful" --msgbox "\Z5Updated from version $VERSION to $REPO_VERSION.\n\nChanges in this version:\n$changelog\n\nPlease restart the script for changes to take effect." 16 70
+            else
+                dialog --colors --title "Update Successful" --msgbox "\Z5Updated from version $VERSION to $REPO_VERSION.\n\nPlease restart the script for changes to take effect." 10 60
+            fi
+            
+            # Cleanup and exit
+            rm -rf "$temp_dir"
+            cd "$current_dir" || true
+            exit 0
+        else
+            dialog --colors --title "Update Cancelled" --msgbox "\Z5Update cancelled. Keeping version $VERSION." 8 60
+            rm -rf "$temp_dir"
+            cd "$current_dir" || true
+            return 0
+        fi
+    } &
+    
+    # Wait for background process to complete
+    wait
+    
+    # Make sure dialog is killed
+    kill $dialog_pid 2>/dev/null || true
+    
+    # Return to original directory
+    cd "$current_dir" || true
+    return 0
 }
 
 # Remove the script from the system
@@ -550,7 +637,56 @@ remove_script() {
     fi
 }
 
-# Display the about information
+# Check for updates and notify user
+check_for_updates() {
+    dialog --colors --title "Checking for Updates" --infobox "\Z5Checking for updates from $REPO_URL..." 5 60
+    
+    # Create temp directory
+    local temp_dir="/tmp/sdbtt_update_check_$(date +%s)"
+    mkdir -p "$temp_dir"
+    cd "$temp_dir" || return 1
+    
+    # Silent clone or fetch latest version info
+    if ! git clone --depth 1 "$REPO_URL" . >/dev/null 2>&1; then
+        dialog --colors --title "Update Check Failed" --msgbox "\Z1Failed to check for updates. Check your internet connection and try again." 8 60
+        rm -rf "$temp_dir"
+        return 1
+    fi
+    
+    # Get latest version
+    local REPO_VERSION=""
+    if [ -f "VERSION" ]; then
+        REPO_VERSION=$(cat VERSION)
+    else
+        REPO_VERSION=$(grep "^VERSION=" sdbtt | cut -d'"' -f2)
+    fi
+    
+    # Clean up
+    cd - >/dev/null
+    rm -rf "$temp_dir"
+    
+    if [ -z "$REPO_VERSION" ]; then
+        dialog --colors --title "Update Check Failed" --msgbox "\Z1Could not determine repository version." 8 60
+        return 1
+    fi
+    
+    # Compare versions
+    if [ "$VERSION" = "$REPO_VERSION" ]; then
+        dialog --colors --title "No Updates" --msgbox "\Z5Your version ($VERSION) is already up to date." 8 60
+        return 0
+    else
+        dialog --colors --title "Update Available" --yesno "\Z5A new version is available.\n\nCurrent version: $VERSION\nNew version: $REPO_VERSION\n\nDo you want to update now?" 10 60
+        
+        if [ $? -eq 0 ]; then
+            update_script
+            return $?
+        fi
+    fi
+    
+    return 0
+}
+
+# Display the about information with enhanced colors
 show_about() {
     dialog --colors --title "About SDBTT" --msgbox "\
 \Z5Simple Database Transfer Tool (SDBTT) v$VERSION\Z0
@@ -558,7 +694,7 @@ show_about() {
 A tool for importing and managing MySQL databases with ease.
 \n
 \Z5Features:\Z0
-- Interactive TUI with Synthwave theme
+- Interactive TUI with enhanced Synthwave theme
 - Directory navigation and selection
 - Secure password management
 - Multiple import methods for compatibility
@@ -571,7 +707,7 @@ A tool for importing and managing MySQL databases with ease.
 " 20 70
 }
 
-# Display the MySQL administration menu
+# Display the MySQL administration menu with enhanced colors
 mysql_admin_menu() {
     if [ -z "$MYSQL_USER" ] || [ -z "$MYSQL_PASS" ]; then
         dialog --colors --title "MySQL Admin" --msgbox "\Z1MySQL credentials not configured.\n\nPlease set your MySQL username and password first." 8 60
@@ -582,13 +718,13 @@ mysql_admin_menu() {
         local choice
         choice=$(dialog --colors --clear --backtitle "\Z5SDBTT MySQL Administration\Z0" \
             --title "MySQL Administration" --menu "Choose an option:" 15 60 8 \
-            "1" "\Z5List All Databases\Z0" \
-            "2" "\Z5List All Users\Z0" \
-            "3" "\Z5Show User Privileges\Z0" \
-            "4" "\Z5Show Database Size\Z0" \
-            "5" "\Z5Optimize Tables\Z0" \
-            "6" "\Z5Check Database Integrity\Z0" \
-            "7" "\Z5MySQL Status\Z0" \
+            "1" "\Z6List All Databases\Z0" \
+            "2" "\Z6List All Users\Z0" \
+            "3" "\Z6Show User Privileges\Z0" \
+            "4" "\Z6Show Database Size\Z0" \
+            "5" "\Z6Optimize Tables\Z0" \
+            "6" "\Z6Check Database Integrity\Z0" \
+            "7" "\Z6MySQL Status\Z0" \
             "8" "\Z1Back to Main Menu\Z0" \
             3>&1 1>&2 2>&3)
             
@@ -605,7 +741,7 @@ mysql_admin_menu() {
     done
 }
 
-# List all databases
+# List all databases with enhanced formatting
 list_databases() {
     local result
     result=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "SHOW DATABASES;" 2>/dev/null)
@@ -615,14 +751,14 @@ list_databases() {
         return
     fi
     
-    # Format the output for display
+    # Format the output for display with consistent coloring
     local formatted_result
     formatted_result=$(echo "$result" | sed 's/Database/\\Z5Database\\Z0/g')
     
     dialog --colors --title "MySQL Databases" --msgbox "$formatted_result" 20 60
 }
 
-# List all MySQL users
+# List all MySQL users with enhanced formatting
 list_users() {
     local result
     result=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "SELECT User, Host FROM mysql.user;" 2>/dev/null)
@@ -632,14 +768,14 @@ list_users() {
         return
     fi
     
-    # Format the output for display
+    # Format the output for display with enhanced coloring
     local formatted_result
     formatted_result=$(echo "$result" | sed 's/User/\\Z5User\\Z0/g' | sed 's/Host/\\Z5Host\\Z0/g')
     
     dialog --colors --title "MySQL Users" --msgbox "$formatted_result" 20 60
 }
 
-# Show privileges for a specific user
+# Show privileges for a specific user with enhanced formatting
 show_user_privileges() {
     local username
     username=$(dialog --colors --title "User Privileges" --inputbox "Enter MySQL username:" 8 60 3>&1 1>&2 2>&3)
@@ -656,10 +792,14 @@ show_user_privileges() {
         return
     fi
     
-    dialog --colors --title "Privileges for $username" --msgbox "$result" 20 70
+    # Format with consistent coloring
+    local formatted_result
+    formatted_result=$(echo "$result" | sed 's/Grants for/\\Z5Grants for\\Z0/g')
+    
+    dialog --colors --title "Privileges for $username" --msgbox "$formatted_result" 20 70
 }
 
-# Show database sizes
+# Show database sizes with enhanced formatting
 show_database_size() {
     local result
     result=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "
@@ -675,14 +815,14 @@ show_database_size() {
         return
     fi
     
-    # Format the output for display
+    # Format the output with enhanced coloring
     local formatted_result
     formatted_result=$(echo "$result" | sed 's/Database/\\Z5Database\\Z0/g' | sed 's/Size (MB)/\\Z5Size (MB)\\Z0/g')
     
     dialog --colors --title "Database Sizes" --msgbox "$formatted_result" 20 70
 }
 
-# Optimize tables in a database
+# Optimize tables in a database with progress bar and log display
 optimize_tables() {
     local db_name
     db_name=$(dialog --colors --title "Optimize Tables" --inputbox "Enter database name:" 8 60 3>&1 1>&2 2>&3)
@@ -709,39 +849,78 @@ optimize_tables() {
         return
     fi
     
-    # Create a progress dialog
-    (
-        echo "0"
-        echo "XXX"
-        echo "Preparing to optimize tables..."
-        echo "XXX"
-        
+    # Create a temporary log file for optimization progress
+    local opt_log_file="/tmp/sdbtt_optimize_$$.log"
+    echo "Starting optimization for database '$db_name'" > "$opt_log_file"
+    
+    # Calculate total tables for progress
+    local total=$(echo "$tables" | wc -l)
+    
+    # Use a split display - progress gauge on top, log tail at bottom
+    dialog --colors --title "Optimizing Database" \
+           --mixedgauge "Preparing to optimize tables in $db_name..." 0 70 0 \
+           "Progress" "0%" "Remaining" "100%" 2>/dev/null &
+    local dialog_pid=$!
+    
+    # Open a tail dialog for the log
+    dialog --colors --title "Optimization Log" --begin 10 5 --tailbox "$opt_log_file" 15 70 &
+    local tail_pid=$!
+    
+    {
         local i=0
-        local total=$(echo "$tables" | wc -l)
-        
         for table in $tables; do
             i=$((i + 1))
             progress=$((i * 100 / total))
+            remaining=$((100 - progress))
             
-            echo "$progress"
-            echo "XXX"
-            echo "Optimizing table: $table ($i of $total)"
-            echo "XXX"
+            # Update the log file
+            echo "[$i/$total] Optimizing table: $table" >> "$opt_log_file"
             
-            mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "OPTIMIZE TABLE \`$db_name\`.\`$table\`;" >/dev/null 2>&1
+            # Update the progress gauge
+            dialog --colors --title "Optimizing Database" \
+                   --mixedgauge "Optimizing tables in $db_name..." 0 70 $progress \
+                   "Progress" "$progress%" "Remaining" "$remaining%" 2>/dev/null
+            
+            # Perform the optimization
+            result=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "OPTIMIZE TABLE \`$db_name\`.\`$table\`;" 2>&1)
+            echo "Result: $result" >> "$opt_log_file"
+            echo "----------------------------------------" >> "$opt_log_file"
+            
+            # Small delay for visibility
             sleep 0.1
         done
         
-        echo "100"
-        echo "XXX"
-        echo "All tables optimized."
-        echo "XXX"
-    ) | dialog --colors --title "Optimizing Database" --gauge "Preparing to optimize tables..." 10 70 0
+        # Mark as complete
+        echo "Optimization complete for all $total tables in $db_name" >> "$opt_log_file"
+        
+        # Final progress update - 100%
+        dialog --colors --title "Optimizing Database" \
+               --mixedgauge "Optimizing tables in $db_name..." 0 70 100 \
+               "Progress" "100%" "Remaining" "0%" 2>/dev/null
+        
+        # Give time to see the final state
+        sleep 2
+        
+        # Kill the dialog processes
+        kill $dialog_pid 2>/dev/null || true
+        kill $tail_pid 2>/dev/null || true
+        
+        # Show completion dialog
+        dialog --colors --title "Optimization Complete" --msgbox "\Z5All tables in database '$db_name' have been optimized.\n\nSee full details in the optimization log." 8 70
+        
+        # Display the log in a scrollable viewer
+        dialog --colors --title "Optimization Results" --textbox "$opt_log_file" 20 76
+        
+        # Clean up
+        rm -f "$opt_log_file"
+        
+    } &
     
-    dialog --colors --title "Optimization Complete" --msgbox "\Z5All tables in database '$db_name' have been optimized." 8 60
+    # Wait for the background process to complete
+    wait
 }
 
-# Check database integrity
+# Check database integrity with enhanced UI
 check_database_integrity() {
     local db_name
     db_name=$(dialog --colors --title "Check Database Integrity" --inputbox "Enter database name:" 8 60 3>&1 1>&2 2>&3)
@@ -768,49 +947,79 @@ check_database_integrity() {
         return
     fi
     
-    # Create a temporary file for results
-    local results_file=$(mktemp)
+    # Create a temporary log file for check progress
+    local check_log_file="/tmp/sdbtt_check_$$.log"
+    echo "Starting integrity check for database '$db_name'" > "$check_log_file"
     
-    # Create a progress dialog
-    (
-        echo "0"
-        echo "XXX"
-        echo "Preparing to check tables..."
-        echo "XXX"
-        
+    # Calculate total tables for progress
+    local total=$(echo "$tables" | wc -l)
+    
+    # Use a split display - progress gauge on top, log tail at bottom
+    dialog --colors --title "Checking Database Integrity" \
+           --mixedgauge "Preparing to check tables in $db_name..." 0 70 0 \
+           "Progress" "0%" "Remaining" "100%" 2>/dev/null &
+    local dialog_pid=$!
+    
+    # Open a tail dialog for the log
+    dialog --colors --title "Check Log" --begin 10 5 --tailbox "$check_log_file" 15 70 &
+    local tail_pid=$!
+    
+    {
         local i=0
-        local total=$(echo "$tables" | wc -l)
-        
         for table in $tables; do
             i=$((i + 1))
             progress=$((i * 100 / total))
+            remaining=$((100 - progress))
             
-            echo "$progress"
-            echo "XXX"
-            echo "Checking table: $table ($i of $total)"
-            echo "XXX"
+            # Update the log file
+            echo "[$i/$total] Checking table: $table" >> "$check_log_file"
             
-            mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "CHECK TABLE \`$db_name\`.\`$table\`;" >> "$results_file" 2>/dev/null
+            # Update the progress gauge
+            dialog --colors --title "Checking Database Integrity" \
+                   --mixedgauge "Checking tables in $db_name..." 0 70 $progress \
+                   "Progress" "$progress%" "Remaining" "$remaining%" 2>/dev/null
+            
+            # Perform the check
+            result=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "CHECK TABLE \`$db_name\`.\`$table\`;" 2>&1)
+            echo "Result: " >> "$check_log_file"
+            echo "$result" >> "$check_log_file"
+            echo "----------------------------------------" >> "$check_log_file"
+            
+            # Small delay for visibility
             sleep 0.1
         done
         
-        echo "100"
-        echo "XXX"
-        echo "All tables checked."
-        echo "XXX"
-    ) | dialog --colors --title "Checking Database Integrity" --gauge "Preparing to check tables..." 10 70 0
+        # Mark as complete
+        echo "Integrity check complete for all $total tables in $db_name" >> "$check_log_file"
+        
+        # Final progress update - 100%
+        dialog --colors --title "Checking Database Integrity" \
+               --mixedgauge "Checking tables in $db_name..." 0 70 100 \
+               "Progress" "100%" "Remaining" "0%" 2>/dev/null
+        
+        # Give time to see the final state
+        sleep 2
+        
+        # Kill the dialog processes
+        kill $dialog_pid 2>/dev/null || true
+        kill $tail_pid 2>/dev/null || true
+        
+        # Show completion dialog
+        dialog --colors --title "Integrity Check Complete" --msgbox "\Z5All tables in database '$db_name' have been checked.\n\nSee full details in the check log." 8 70
+        
+        # Display the log in a scrollable viewer
+        dialog --colors --title "Integrity Check Results" --textbox "$check_log_file" 20 76
+        
+        # Clean up
+        rm -f "$check_log_file"
+        
+    } &
     
-    # Display results
-    local results
-    results=$(cat "$results_file")
-    
-    dialog --colors --title "Integrity Check Results" --msgbox "\Z5Results for database '$db_name':\n\n$results" 20 70
-    
-    # Clean up
-    rm -f "$results_file"
+    # Wait for the background process to complete
+    wait
 }
 
-# Show MySQL server status
+# Show MySQL server status with enhanced formatting
 show_mysql_status() {
     local result
     result=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "SHOW STATUS;" 2>/dev/null)
@@ -820,7 +1029,7 @@ show_mysql_status() {
         return
     fi
     
-    # Format important status variables
+    # Format important status variables with enhanced coloring
     local formatted_result
     formatted_result=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "
     SHOW GLOBAL STATUS WHERE 
@@ -835,38 +1044,52 @@ show_mysql_status() {
     Variable_name = 'Bytes_received' OR
     Variable_name = 'Bytes_sent';" 2>/dev/null)
     
-    # Format MySQL version
+    # Format MySQL version with enhanced coloring
     local version
     version=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "SELECT VERSION();" 2>/dev/null)
     
-    # Format the output for display
-    formatted_result=$(echo -e "MySQL Version:\n$version\n\nStatus Variables:\n$formatted_result" | sed 's/Variable_name/\\Z5Variable_name\\Z0/g' | sed 's/Value/\\Z5Value\\Z0/g')
+    # Format the output with enhanced theming
+    formatted_result=$(echo -e "\Z5MySQL Version:\Z0\n$version\n\n\Z5Status Variables:\Z0\n$formatted_result" | 
+                      sed 's/Variable_name/\\Z6Variable_name\\Z0/g' | 
+                      sed 's/Value/\\Z6Value\\Z0/g')
     
     dialog --colors --title "MySQL Server Status" --msgbox "$formatted_result" 20 70
 }
 
-# Display main menu
+# Display main menu with enhanced theming
 show_main_menu() {
     local choice
     
     debug_log "Displaying main menu"
     
     while true; do
-        choice=$(dialog --colors --clear --backtitle "\Z5SDBTT - Simple Database Transfer Tool v$VERSION\Z0" \
-            --title "Main Menu" --menu "Choose an option:" 17 60 10 \
-            "1" "\Z6Import Databases\Z0" \
-            "2" "\Z6Configure Settings\Z0" \
-            "3" "\Z6Browse & Select Directories\Z0" \
-            "4" "\Z6MySQL Administration\Z0" \
-            "5" "\Z6View Logs\Z0" \
-            "6" "\Z6Save Current Settings\Z0" \
-            "7" "\Z6Load Saved Settings\Z0" \
-            "8" "\Z6About SDBTT\Z0" \
-            "9" "\Z6Help\Z0" \
-            "0" "\Z1Exit\Z0" \
+        # Try to use a simpler menu format without colors while troubleshooting
+        choice=$(dialog --clear --backtitle "SDBTT - Simple Database Transfer Tool v$VERSION" \
+            --title "Main Menu" --menu "Choose an option:" 18 60 11 \
+            "1" "Import Databases" \
+            "2" "Configure Settings" \
+            "3" "Browse & Select Directories" \
+            "4" "MySQL Administration" \
+            "5" "View Logs" \
+            "6" "Save Current Settings" \
+            "7" "Load Saved Settings" \
+            "8" "Check for Updates" \
+            "9" "About SDBTT" \
+            "10" "Help" \
+            "0" "Exit" \
             3>&1 1>&2 2>&3)
+        
+        local menu_exit=$?
+        debug_log "Menu returned: '$choice' with exit code $menu_exit"
             
-        debug_log "Menu choice: $choice"
+        if [ $menu_exit -ne 0 ]; then
+            # Exit code is not 0, check if it's a normal cancel
+            if [ $menu_exit -ne 1 ]; then
+                debug_log "Dialog menu failed with code $menu_exit"
+                echo "ERROR: Dialog menu failed, trying to continue..." >&2
+            fi
+            choice=""
+        fi
             
         case $choice in
             1) import_databases_menu ;;
@@ -877,27 +1100,27 @@ show_main_menu() {
             6) save_config ;;
             7) 
                 if load_config; then
-                    dialog --colors --title "Configuration Loaded" --msgbox "\Z5Settings have been loaded from $CONFIG_FILE" 8 60
+                    dialog --title "Configuration Loaded" --msgbox "Settings have been loaded from $CONFIG_FILE" 8 60
                 else
-                    dialog --colors --title "Error" --msgbox "\Z1No saved configuration found at $CONFIG_FILE" 8 60
+                    dialog --title "Error" --msgbox "No saved configuration found at $CONFIG_FILE" 8 60
                 fi
                 ;;
-            8) show_about ;;
-            9) show_help ;;
+            8) check_for_updates ;;
+            9) show_about ;;
+            10) show_help ;;
             0) 
-                dialog --colors --title "Goodbye" --msgbox "\Z5Thank you for using SDBTT" 8 60
-                # Clean up and reset terminal
-                rm -f "$DIALOGRC"
+                # Clean up and reset terminal without showing goodbye message
+                rm -f "$DIALOGRC" 2>/dev/null
                 clear
                 exit 0
                 ;;
             *) 
                 # User pressed Cancel or ESC
                 if [ -z "$choice" ]; then
-                    dialog --colors --title "Exit Confirmation" --yesno "\Z1Are you sure you want to exit?" 8 60
+                    dialog --title "Exit Confirmation" --yesno "Are you sure you want to exit?" 8 60
                     if [ $? -eq 0 ]; then
-                        # Clean up and reset terminal
-                        rm -f "$DIALOGRC"
+                        # Clean up and reset terminal without showing goodbye message
+                        rm -f "$DIALOGRC" 2>/dev/null
                         clear
                         exit 0
                     fi
@@ -907,7 +1130,7 @@ show_main_menu() {
     done
 }
 
-# Configure settings menu
+# Configure settings menu with enhanced theming
 configure_settings() {
     local settings_menu
     
@@ -959,7 +1182,7 @@ configure_settings() {
     done
 }
 
-# Browse and select directories
+# Browse and select directories with enhanced theming
 browse_directories() {
     local current_dir="${SQL_DIR:-$HOME}"
     local selection
@@ -975,7 +1198,7 @@ browse_directories() {
         # List directories and SQL files
         while IFS= read -r dir; do
             if [ -d "$dir" ]; then
-                # Format for display
+                # Format for display with better colors
                 local display_name="${dir##*/}/"
                 dirs+=("$dir/" "\Z6📁 $display_name\Z0")
             fi
@@ -1038,7 +1261,7 @@ browse_directories() {
     done
 }
 
-# Import databases menu
+# Import databases menu with enhanced theming
 import_databases_menu() {
     if [ -z "$SQL_DIR" ] || [ ! -d "$SQL_DIR" ]; then
         dialog --colors --title "No Directory Selected" \
@@ -1105,7 +1328,7 @@ import_databases_menu() {
             # Apply the new prefix
             local db_name="${DB_PREFIX}${base_db_name}"
             
-            # Show original name → new name
+            # Show original name → new name with enhanced colors
             if [ -n "$existing_prefix" ]; then
                 sql_files+=("$file" "[$i] \Z6$filename\Z0 → \Z5$db_name\Z0 (replacing prefix '\Z3$existing_prefix\Z0')")
             else
@@ -1164,7 +1387,7 @@ import_databases_menu() {
     esac
 }
 
-# Show import plan
+# Show import plan with enhanced formatting
 show_import_plan() {
     local plan="\Z5Import Plan Summary:\Z0\n\n"
     plan+="MySQL User: \Z6$MYSQL_USER\Z0\n"
@@ -1194,7 +1417,7 @@ show_import_plan() {
             # Apply the new prefix
             local db_name="${DB_PREFIX}${base_db_name}"
             
-            # Show original name → new name
+            # Show original name → new name with enhanced colors
             if [ -n "$existing_prefix" ]; then
                 file_list+="\Z6$filename\Z0 → \Z5$db_name\Z0 (replacing prefix '\Z3$existing_prefix\Z0')\n"
             else
@@ -1317,7 +1540,7 @@ grant_privileges() {
     }
 }
 
-# Start the import process
+# Enhanced import process with better progress display and log viewing
 start_import_process() {
     local file_list="$1"
     local db_count=0
@@ -1327,107 +1550,142 @@ start_import_process() {
     # Create temp directory if it doesn't exist
     mkdir -p "$TEMP_DIR"
     
-    # Initialize log file
+    # Initialize log files
     echo "Starting database import process at $(date)" > "$LOG_FILE"
     echo "MySQL user: $MYSQL_USER" >> "$LOG_FILE"
     echo "Database owner: $DB_OWNER" >> "$LOG_FILE"
     echo "Database prefix: $DB_PREFIX" >> "$LOG_FILE"
     echo "SQL file pattern: $SQL_PATTERN" >> "$LOG_FILE"
+    echo "----------------------------------------" >> "$LOG_FILE"
+    
+    # Create a display log file for the UI
+    echo "Starting database import process at $(date)" > "$DISPLAY_LOG_FILE"
+    echo "----------------------------------------" >> "$DISPLAY_LOG_FILE"
     
     # Check MySQL server's default charset
     local default_charset=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -N -e "SHOW VARIABLES LIKE 'character_set_server';" | awk '{print $2}')
     local default_collation=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -N -e "SHOW VARIABLES LIKE 'collation_server';" | awk '{print $2}')
     log_message "MySQL server default charset: $default_charset, collation: $default_collation"
     
+    # Calculate total files
+    local total_files=$(echo "$file_list" | wc -w)
+    
     # Create a temporary file for progress calculation
     local progress_file=$(mktemp)
     echo "0" > "$progress_file"
     
-    # Calculate total files
-    local total_files=$(echo "$file_list" | wc -w)
+    # Create initial log display and progress display - simpler setup
+    touch "$DISPLAY_LOG_FILE" # Ensure the file exists
+    log_message "Starting import process..."
+    log_message "Found $total_files files to import"
     
-    # Use a background process to update the progress
-    (
-        local current=0
-        while [ "$current" -le 100 ]; do
-            current=$(cat "$progress_file")
-            echo "XXX"
-            echo "$current"
-            echo "\Z5Importing databases... ($current%)\Z0"
-            echo "XXX"
-            sleep 0.5
-        done
-    ) | dialog --colors --title "Import Progress" --gauge "Preparing to import databases..." 10 70 0 &
-    local dialog_pid=$!
+    # Use a simpler progress display to avoid dialog issues
+    dialog --title "Import Progress" --gauge "Preparing to import databases..." 10 70 0 &
+    local gauge_pid=$!
     
-    # Process each file
-    for sql_file in $file_list; do
-        # Extract database name from filename
-        local filename=$(basename "$sql_file")
-        local base_filename="${filename%.sql}"
-        
-        # Extract existing prefix if any
-        if [[ "$base_filename" == *"_"* ]]; then
-            local existing_prefix=$(echo "$base_filename" | sed -E 's/^([^_]+)_.*/\1/')
-            local base_db_name=$(echo "$base_filename" | sed -E 's/^[^_]+_(.*)$/\1/')
-        else
-            local base_db_name="$base_filename"
-        fi
-        
-        # Apply the new prefix
-        local db_name="${DB_PREFIX}${base_db_name}"
-        
-        ((db_count++))
-        log_message "Processing database: $db_name from file $filename"
-        
-        # Create a processed version with standardized charset
-        local processed_file="$TEMP_DIR/processed_$filename"
-        
-        # Create the database
-        create_database "$db_name"
-        
-        # Import the SQL file
-        if import_sql_file "$db_name" "$sql_file" "$processed_file"; then
-            # Grant privileges if import was successful
-            grant_privileges "$db_name" "$DB_OWNER"
-            ((success_count++))
-        else
-            ((failure_count++))
-        fi
-        
-        log_message "Done with $db_name"
-        log_message "------------------------"
-        
-        # Update progress
-        local progress=$((db_count * 100 / total_files))
-        echo "$progress" > "$progress_file"
-    done
-    
-    # Mark as 100% complete
-    echo "100" > "$progress_file"
-    
-    # Wait a moment for the dialog to update
+    # Wait briefly to ensure dialog is running
     sleep 1
     
-    # Kill the progress dialog
-    kill $dialog_pid 2>/dev/null
+    # Background process for the actual import
+    {
+        # Process each file
+        for sql_file in $file_list; do
+            # Extract database name from filename
+            local filename=$(basename "$sql_file")
+            local base_filename="${filename%.sql}"
+            
+            # Extract existing prefix if any
+            if [[ "$base_filename" == *"_"* ]]; then
+                local existing_prefix=$(echo "$base_filename" | sed -E 's/^([^_]+)_.*/\1/')
+                local base_db_name=$(echo "$base_filename" | sed -E 's/^[^_]+_(.*)$/\1/')
+            else
+                local base_db_name="$base_filename"
+            fi
+            
+            # Apply the new prefix
+            local db_name="${DB_PREFIX}${base_db_name}"
+            
+            ((db_count++))
+            log_message "Processing database: $db_name from file $filename"
+            
+            # Update progress display
+            local progress=$((db_count * 100 / total_files))
+            
+            # Update the progress gauge - simpler version without colors
+            echo $progress | dialog --title "Import Progress" \
+                   --gauge "Importing database $db_count of $total_files: $db_name" 10 70 $progress \
+                   2>/dev/null
+            
+            # Create a processed version with standardized charset
+            local processed_file="$TEMP_DIR/processed_$filename"
+            
+            # Create the database
+            create_database "$db_name"
+            
+            # Import the SQL file
+            if import_sql_file "$db_name" "$sql_file" "$processed_file"; then
+                # Grant privileges if import was successful
+                grant_privileges "$db_name" "$DB_OWNER"
+                ((success_count++))
+            else
+                ((failure_count++))
+            fi
+            
+            log_message "Done with $db_name"
+            log_message "------------------------"
+            
+            # Small delay for readability
+            sleep 0.2
+        done
+        
+        # Apply privileges
+        log_message "Flushing privileges..."
+        mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "FLUSH PRIVILEGES;" 2>> "$LOG_FILE"
+        
+        # Clean up temporary files
+        log_message "Cleaning up temporary files..."
+        rm -rf "$TEMP_DIR"
+        
+        log_message "All databases have been processed"
+        log_message "------------------------"
+        log_message "Summary:"
+        log_message "Total databases processed: $db_count"
+        log_message "Successful imports: $success_count"
+        log_message "Failed imports: $failure_count"
+        
+        # Final progress update - 100%
+        echo 100 | dialog --title "Import Progress" \
+               --gauge "Import completed!" 10 70 100 \
+               2>/dev/null
+        
+        # Give time to see the final state
+        sleep 2
+        
+        # Kill the dialog process
+        kill $gauge_pid 2>/dev/null || true
+        
+        # Show the result summary without colors
+        dialog --title "Import Complete" --msgbox "Import process complete.\n\nTotal databases processed: $db_count\nSuccessful imports: $success_count\nFailed imports: $failure_count\n\nLog file saved to: $LOG_FILE" 12 70
+        
+        # Show the complete log if there were failures
+        if [ $failure_count -gt 0 ]; then
+            dialog --title "Import Log" --yesno "Some imports failed. Would you like to view the complete log?" 8 60
+            if [ $? -eq 0 ]; then
+                dialog --title "Complete Import Log" --textbox "$LOG_FILE" 25 78
+            fi
+        fi
+        
+        # Clean up
+        rm -f "$progress_file"
+        rm -f "$DISPLAY_LOG_FILE"
+        
+    } &
     
-    # Apply privileges
-    log_message "Flushing privileges..."
-    mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "FLUSH PRIVILEGES;" 2>> "$LOG_FILE"
-    
-    # Clean up temporary files
-    log_message "Cleaning up temporary files..."
-    rm -rf "$TEMP_DIR"
-    rm -f "$progress_file"
-    
-    log_message "All databases have been processed"
-    
-    # Show the result summary
-    dialog --colors --title "Import Complete" --msgbox "\Z5Import process complete.\Z0\n\nTotal databases processed: \Z6$db_count\Z0\nSuccessful imports: \Z2$success_count\Z0\nFailed imports: \Z1$failure_count\Z0\n\nLog file saved to: \Z6$LOG_FILE\Z0" 12 70
+    # Wait for the background process to complete
+    wait
 }
 
-# Select from previously used directories
+# Select from previously used directories with enhanced theming
 select_from_recent_dirs() {
     if [ -z "$LAST_DIRECTORIES" ]; then
         dialog --colors --title "No Recent Directories" --msgbox "\Z1No recently used directories found." 8 60
@@ -1472,7 +1730,7 @@ select_from_recent_dirs() {
     esac
 }
 
-# View logs menu
+# View logs menu with enhanced theming
 view_logs() {
     local logs=()
     local i=1
@@ -1514,13 +1772,28 @@ view_logs() {
                 fi
             fi
             
-            # View log file
-            dialog --colors --title "Log File: $(basename "$selection")" --textbox "$selection" 25 78
+            # View log file with enhanced formatting
+            # Process the log file to add color to key events
+            local temp_log="/tmp/sdbtt_colored_log_$$"
+            cat "$selection" | 
+                sed 's/\[ERROR\]/\\Z1[ERROR]\\Z0/g' | 
+                sed 's/\[WARNING\]/\\Z3[WARNING]\\Z0/g' |
+                sed 's/Creating database:/\\Z5Creating database:\\Z0/g' |
+                sed 's/Import successful/\\Z2Import successful\\Z0/g' |
+                sed 's/Failed to/\\Z1Failed to\\Z0/g' |
+                sed 's/All import methods failed/\\Z1All import methods failed\\Z0/g' |
+                sed 's/Flushing privileges/\\Z5Flushing privileges\\Z0/g' |
+                sed 's/All databases have been processed/\\Z5All databases have been processed\\Z0/g' > "$temp_log"
+            
+            dialog --colors --title "Log File: $(basename "$selection")" --textbox "$temp_log" 25 78
+            
+            # Clean up
+            rm -f "$temp_log"
             ;;
     esac
 }
 
-# Help screen
+# Help screen with enhanced theming
 show_help() {
     dialog --colors --title "SDBTT Help" --msgbox "\
 \Z5Simple Database Transfer Tool (SDBTT) Help\Z0
@@ -1528,14 +1801,14 @@ show_help() {
 
 This tool helps you import MySQL databases from SQL files with the following features:
 
-* Interactive text-based user interface with Synthwave theme
-* Directory navigation and selection
+\Z6* Interactive TUI with enhanced Synthwave theme
+* Directory navigation and selection 
 * Configuration management with secure password storage
 * Automatic charset conversion
 * Multiple import methods for compatibility
 * Prefix replacement
 * MySQL administration tools
-* Privilege management
+* Privilege management\Z0
 
 \Z5How to use this tool:\Z0
 1. Configure your MySQL credentials
@@ -1549,6 +1822,9 @@ This tool helps you import MySQL databases from SQL files with the following fea
 --update     Update SDBTT from GitHub
 --remove     Remove SDBTT from system
 --help       Show this help message
+--debug      Enable debug logging
+--no-dialog  Disable dialog UI
+--no-color   Disable colored output
 
 \Z5Security features:\Z0
 * Passwords are encrypted and stored securely
@@ -1556,127 +1832,7 @@ This tool helps you import MySQL databases from SQL files with the following fea
 * No plaintext passwords in config files
 
 The tool saves your settings for future use and keeps logs of all operations.
-
-\Z6Press OK to return to the main menu.\Z0
 " 25 78
-}
-
-# Process command line arguments
-process_arguments() {
-    case "$1" in
-        --install)
-            install_script
-            exit $?
-            ;;
-        --update)
-            update_script
-            exit $?
-            ;;
-        --remove)
-            remove_script
-            exit $?
-            ;;
-        --help)
-            show_header
-            cat << EOF
-SDBTT: Simple Database Transfer Tool
-Usage: $(basename "$0") [OPTION]
-
-Options:
-  --install    Install SDBTT to system
-  --update     Update SDBTT from GitHub
-  --remove     Remove SDBTT from system
-  --help       Show this help message
-
-When run without options, launches the interactive TUI.
-EOF
-            exit 0
-            ;;
-        --debug)
-            DEBUG=1
-            debug_log "Debug mode enabled"
-            ;;
-    esac
-}
-
-# Main function
-main() {
-    # Process command line arguments if any
-    if [ $# -gt 0 ]; then
-        process_arguments "$@"
-    fi
-    
-    # Check dependencies before proceeding
-    check_dependencies
-    
-    # Get terminal size information
-    get_terminal_size
-    
-    # Setup terminal appearance first (simple clearing)
-    clear
-    
-    if [ "$USE_DIALOG" -eq 1 ]; then
-        # Setup dialog theme 
-        if ! setup_dialog_theme; then
-            debug_log "Dialog theme setup failed, falling back to console mode"
-            USE_DIALOG=0
-        fi
-        
-        # Check if dialog works
-        if ! check_dialog; then
-            debug_log "Dialog check failed, falling back to console mode"
-            USE_DIALOG=0
-        fi
-    fi
-    
-    # Set up the complete terminal appearance with colors if available
-    set_term_appearance
-    
-    # Show the header
-    show_header
-    
-    # Create required directories
-    initialize_directories
-    
-    # Set default values if not loaded from config
-    MYSQL_USER=${MYSQL_USER:-"root"}
-    SQL_PATTERN=${SQL_PATTERN:-"*.sql"}
-    
-    # Try to load config
-    load_config
-    
-    # Try to retrieve password if we have a username
-    if [ -n "$MYSQL_USER" ] && [ -z "$MYSQL_PASS" ]; then
-        MYSQL_PASS=$(get_password "$MYSQL_USER")
-    fi
-    
-    # Simple test to verify dialog is working
-    if [ "$USE_DIALOG" -eq 1 ]; then
-        debug_log "Testing dialog with simple message box"
-        if ! dialog --clear --title "SDBTT Ready" --msgbox "Welcome to SDBTT!\n\nPress OK to continue to main menu." 8 50 2>/dev/null; then
-            debug_log "Dialog test failed, falling back to console mode"
-            USE_DIALOG=0
-            echo "Dialog interface not working properly, falling back to console mode." >&2
-            echo "Press Enter to continue..." >&2
-            read
-        fi
-    fi
-    
-    # Show main menu
-    if [ "$USE_DIALOG" -eq 1 ]; then
-        show_main_menu
-    else
-        echo "Console mode not implemented in this version." >&2
-        echo "Please install dialog or fix terminal settings to use SDBTT." >&2
-        exit 1
-    fi
-    
-    # Clean up on exit
-    if [ -n "$DIALOGRC" ] && [ -f "$DIALOGRC" ]; then
-        rm -f "$DIALOGRC"
-    fi
-    
-    debug_log "SDBTT exiting normally"
 }
 
 # Process command line arguments
@@ -1728,6 +1884,89 @@ EOF
                 ;;
         esac
     done
+}
+
+# Main function
+main() {
+    # Set DEBUG temporarily to diagnose issues if needed
+    DEBUG=${DEBUG:-0}
+    debug_log "Starting SDBTT v$VERSION"
+    
+    # Process command line arguments if any
+    if [ $# -gt 0 ]; then
+        process_arguments "$@"
+    fi
+    
+    # Check dependencies before proceeding
+    debug_log "Checking dependencies"
+    check_dependencies
+    
+    # Get terminal size information
+    debug_log "Getting terminal size"
+    get_terminal_size
+    
+    # Simple clearing first
+    clear
+    debug_log "Terminal cleared"
+    
+    # Set up basic terminal appearance
+    debug_log "Setting up terminal appearance"
+    set_term_appearance
+    
+    # Show the header
+    debug_log "Showing header"
+    show_header
+    
+    # Create required directories
+    debug_log "Initializing directories"
+    initialize_directories
+    
+    # Set default values if not loaded from config
+    MYSQL_USER=${MYSQL_USER:-"root"}
+    SQL_PATTERN=${SQL_PATTERN:-"*.sql"}
+    
+    # Try to load config
+    debug_log "Loading configuration"
+    load_config
+    
+    # Try to retrieve password if we have a username
+    if [ -n "$MYSQL_USER" ] && [ -z "$MYSQL_PASS" ]; then
+        MYSQL_PASS=$(get_password "$MYSQL_USER")
+    fi
+    
+    # Setup dialog only after other initialization is complete
+    debug_log "Dialog setup starting"
+    if [ "$USE_DIALOG" -eq 1 ]; then
+        # Setup dialog theme 
+        if ! setup_dialog_theme; then
+            debug_log "Dialog theme setup failed, falling back to console mode"
+            USE_DIALOG=0
+        fi
+        
+        # Check if dialog works
+        if ! check_dialog; then
+            debug_log "Dialog check failed, falling back to console mode"
+            USE_DIALOG=0
+        fi
+    fi
+    
+    debug_log "Ready to show main menu"
+    
+    # Show main menu without unnecessary dialogs
+    if [ "$USE_DIALOG" -eq 1 ]; then
+        show_main_menu
+    else
+        echo "Console mode not implemented in this version." >&2
+        echo "Please install dialog or fix terminal settings to use SDBTT." >&2
+        exit 1
+    fi
+    
+    # Clean up on exit
+    if [ -n "$DIALOGRC" ] && [ -f "$DIALOGRC" ]; then
+        rm -f "$DIALOGRC"
+    fi
+    
+    debug_log "SDBTT exiting normally"
 }
 
 # Start the script
