@@ -477,6 +477,7 @@ EOF
 }
 
 # Enhanced update function with better UI feedback
+# Enhanced update function with better UI feedback and version detection
 update_script() {
     local temp_dir="/tmp/sdbtt_update_$(date +%s)"
     local current_dir=$(pwd)
@@ -512,22 +513,63 @@ update_script() {
             return 1
         fi
         
-        # Check if there's a newer version
+        # Check if there's a newer version - ENHANCED VERSION DETECTION
         echo "[$(date)] Checking version information..." >> "$update_log"
+        
+        # Multiple detection methods for better reliability
+        REPO_VERSION=""
+        
+        # Method 1: Check for VERSION file
         if [ -f "VERSION" ]; then
             REPO_VERSION=$(cat VERSION)
             echo "[$(date)] Found explicit VERSION file: $REPO_VERSION" >> "$update_log"
-        else
-            REPO_VERSION=$(grep "^VERSION=" sdbtt | cut -d'"' -f2)
-            echo "[$(date)] Extracted version from script: $REPO_VERSION" >> "$update_log"
         fi
         
+        # Method 2: Look for VERSION= in sdbtt script with double quotes
+        if [ -z "$REPO_VERSION" ] && [ -f "sdbtt" ]; then
+            REPO_VERSION=$(grep -m 1 "^VERSION=\"" sdbtt | cut -d'"' -f2)
+            if [ -n "$REPO_VERSION" ]; then
+                echo "[$(date)] Extracted version from script (double quotes): $REPO_VERSION" >> "$update_log"
+            fi
+        fi
+        
+        # Method 3: Look for VERSION= in sdbtt script with single quotes
+        if [ -z "$REPO_VERSION" ] && [ -f "sdbtt" ]; then
+            REPO_VERSION=$(grep -m 1 "^VERSION='" sdbtt | cut -d"'" -f2)
+            if [ -n "$REPO_VERSION" ]; then
+                echo "[$(date)] Extracted version from script (single quotes): $REPO_VERSION" >> "$update_log"
+            fi
+        fi
+        
+        # Method 4: Look for VERSION= without quotes
+        if [ -z "$REPO_VERSION" ] && [ -f "sdbtt" ]; then
+            REPO_VERSION=$(grep -m 1 "^VERSION=" sdbtt | sed 's/^VERSION=//g')
+            if [ -n "$REPO_VERSION" ]; then
+                echo "[$(date)] Extracted version from script (no quotes): $REPO_VERSION" >> "$update_log"
+            fi
+        fi
+        
+        # Method 5: Check for version string in the header
+        if [ -z "$REPO_VERSION" ] && [ -f "sdbtt" ]; then
+            REPO_VERSION=$(grep -m 1 "Version: [0-9]*\.[0-9]*\.[0-9]*" sdbtt | sed 's/.*Version: //g')
+            if [ -n "$REPO_VERSION" ]; then
+                echo "[$(date)] Extracted version from header comment: $REPO_VERSION" >> "$update_log"
+            fi
+        fi
+        
+        # Log all files to help with debugging
+        echo "[$(date)] Files in repository:" >> "$update_log"
+        ls -la >> "$update_log" 2>&1
+        
         if [ -z "$REPO_VERSION" ]; then
-            echo "[$(date)] ERROR: Could not determine repository version." >> "$update_log"
+            echo "[$(date)] ERROR: Could not determine repository version using multiple methods." >> "$update_log"
+            echo "[$(date)] Dumping first 20 lines of sdbtt file to aid debugging:" >> "$update_log"
+            head -n 20 sdbtt >> "$update_log" 2>&1 || echo "Could not read sdbtt file" >> "$update_log"
+            
             sleep 2
             kill $dialog_pid 2>/dev/null
             cd "$current_dir" || true
-            dialog --colors --title "Update Failed" --msgbox "\Z1Could not determine repository version." 8 60
+            dialog --colors --title "Update Failed" --msgbox "\Z1Could not determine repository version. Please report this issue to the developer." 8 60
             rm -rf "$temp_dir"
             return 1
         fi
