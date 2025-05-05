@@ -1,6 +1,6 @@
 #!/bin/bash
 # SDBTT: Simple Database Transfer Tool
-# Enhanced MySQL Database Import Script with Synthwave Theme
+# Enhanced MySQL Database Import Script with Retrowave Theme
 # Version: 1.0.3
 
 # Default configuration
@@ -60,7 +60,7 @@ get_terminal_size() {
     debug_log "Terminal size: ${COLUMNS}x${LINES}"
 }
 
-# Enhanced theme settings with more synthwave colors
+# Enhanced theme settings with retrowave colors
 setup_dialog_theme() {
     debug_log "Setting up dialog theme"
     
@@ -80,10 +80,10 @@ setup_dialog_theme() {
     # Create a unique temporary file for this process
     local dialogrc_file="/tmp/dialogrc_sdbtt_$"
     
-    # Create the dialog configuration file with simplified synthwave colors
+    # Create the dialog configuration file with retrowave colors
     # Using more compatible dialog theme settings
     cat > "$dialogrc_file" << 'EOF'
-# Dialog configuration with Synthwave theme
+# Dialog configuration with Retrowave theme
 # Set aspect-ratio and screen edge
 aspect = 0
 separate_widget = ""
@@ -92,39 +92,39 @@ visit_items = OFF
 use_shadow = ON
 use_colors = ON
 
-# Simplified Synthwave color scheme for better compatibility
+# Retrowave color scheme for better compatibility
 screen_color = (BLACK,BLACK,OFF)
 shadow_color = (BLACK,BLACK,OFF)
 dialog_color = (MAGENTA,BLACK,OFF)
 title_color = (MAGENTA,BLACK,ON)
 border_color = (MAGENTA,BLACK,ON)
 button_active_color = (BLACK,MAGENTA,ON)
-button_inactive_color = (MAGENTA,BLACK,OFF)
+button_inactive_color = (CYAN,BLACK,OFF)
 button_key_active_color = (BLACK,MAGENTA,ON)
-button_key_inactive_color = (MAGENTA,BLACK,OFF)
+button_key_inactive_color = (CYAN,BLACK,OFF)
 button_label_active_color = (BLACK,MAGENTA,ON)
-button_label_inactive_color = (MAGENTA,BLACK,OFF)
-inputbox_color = (MAGENTA,BLACK,OFF)
+button_label_inactive_color = (CYAN,BLACK,OFF)
+inputbox_color = (CYAN,BLACK,OFF)
 inputbox_border_color = (MAGENTA,BLACK,ON)
-searchbox_color = (MAGENTA,BLACK,OFF)
+searchbox_color = (CYAN,BLACK,OFF)
 searchbox_title_color = (MAGENTA,BLACK,ON)
 searchbox_border_color = (MAGENTA,BLACK,ON)
-position_indicator_color = (MAGENTA,BLACK,ON)
-menubox_color = (MAGENTA,BLACK,OFF)
+position_indicator_color = (YELLOW,BLACK,ON)
+menubox_color = (CYAN,BLACK,OFF)
 menubox_border_color = (MAGENTA,BLACK,ON)
-item_color = (MAGENTA,BLACK,OFF)
+item_color = (CYAN,BLACK,OFF)
 item_selected_color = (BLACK,MAGENTA,ON)
 tag_color = (MAGENTA,BLACK,ON)
 tag_selected_color = (BLACK,MAGENTA,ON)
 tag_key_color = (MAGENTA,BLACK,ON)
 tag_key_selected_color = (BLACK,MAGENTA,ON)
-check_color = (MAGENTA,BLACK,OFF)
+check_color = (CYAN,BLACK,OFF)
 check_selected_color = (BLACK,MAGENTA,ON)
 uarrow_color = (MAGENTA,BLACK,ON)
 darrow_color = (MAGENTA,BLACK,ON)
-itemhelp_color = (MAGENTA,BLACK,OFF)
+itemhelp_color = (CYAN,BLACK,OFF)
 form_active_text_color = (BLACK,MAGENTA,ON)
-form_text_color = (MAGENTA,BLACK,ON)
+form_text_color = (CYAN,BLACK,ON)
 form_item_readonly_color = (CYAN,BLACK,ON)
 gauge_color = (MAGENTA,BLACK,ON)
 EOF
@@ -146,7 +146,7 @@ EOF
     return 0
 }
 
-# Simplified ANSI color codes for better compatibility
+# Retrowave ANSI color codes for better compatibility
 if [ "$USE_COLORS" -eq 1 ]; then
     RESET="\033[0m"
     BOLD="\033[1m"
@@ -158,11 +158,26 @@ if [ "$USE_COLORS" -eq 1 ]; then
     MAGENTA="\033[35m"
     CYAN="\033[36m"
     WHITE="\033[37m"
-    # Limit bright colors to essential ones
+    # Bright colors for retrowave theme
+    BRIGHTBLACK="\033[90m"
+    BRIGHTRED="\033[91m"
+    BRIGHTGREEN="\033[92m"
+    BRIGHTYELLOW="\033[93m"
+    BRIGHTBLUE="\033[94m"
     BRIGHTMAGENTA="\033[95m"
     BRIGHTCYAN="\033[96m"
+    BRIGHTWHITE="\033[97m"
+    # Background colors
     BGBLACK="\033[40m"
+    BGRED="\033[41m"
+    BGGREEN="\033[42m"
+    BGYELLOW="\033[43m"
+    BGBLUE="\033[44m"
     BGMAGENTA="\033[45m"
+    BGCYAN="\033[46m"
+    BGWHITE="\033[47m"
+    BGBRIGHTBLACK="\033[100m"
+    BGBRIGHTMAGENTA="\033[105m"
 else
     # No colors in non-interactive mode or terminals without color support
     RESET=""
@@ -201,14 +216,16 @@ else
     BGBRIGHTWHITE=""
 fi
 
-# Simplified color presets for better compatibility
-SYN_PRIMARY="${MAGENTA}"
-SYN_SECONDARY="${CYAN}"
-SYN_ALERT="${RED}"
-SYN_SUCCESS="${GREEN}"
-SYN_WARNING="${YELLOW}"
-SYN_BG="${BGBLACK}"
-SYN_HEADER="${MAGENTA}${BOLD}"
+# Retrowave color presets matching the theme
+RW_PRIMARY="${BRIGHTMAGENTA}"
+RW_SECONDARY="${BRIGHTBLUE}"
+RW_ACCENT="${BRIGHTYELLOW}"
+RW_ALERT="${BRIGHTRED}"
+RW_SUCCESS="${BRIGHTGREEN}"
+RW_WARNING="${YELLOW}"
+RW_BG="${BGBLACK}"
+RW_HEADER="${BRIGHTMAGENTA}${BOLD}"
+RW_TEXT="${BRIGHTBLUE}"
 
 # Verify dialog works properly - simplified with better error handling 
 check_dialog() {
@@ -249,12 +266,12 @@ set_term_appearance() {
     # Only perform these operations if we're in a terminal that supports colors
     if [ "$USE_COLORS" -eq 1 ]; then
         # Set terminal title
-        echo -ne "\033]0;SDBTT - Synthwave\007"
+        echo -ne "\033]0;SDBTT - Retrowave\007"
         
-        # Simple clear with basic synthwave effect
+        # Simple clear with basic retrowave effect
         clear
         # Top border
-        echo -e "${BGBLACK}${MAGENTA}$(printf '%*s' ${COLUMNS} | tr ' ' '═')${RESET}"
+        echo -e "${BGBLACK}${BRIGHTMAGENTA}$(printf '%*s' ${COLUMNS} | tr ' ' '═')${RESET}"
         
         # Empty space with black background
         for i in {1..3}; do
@@ -284,7 +301,7 @@ check_dependencies() {
     done
     
     if [ ${#missing_deps[@]} -ne 0 ]; then
-        echo -e "${SYN_ALERT}Error: Missing required dependencies: ${missing_deps[*]}${RESET}"
+        echo -e "${RW_ALERT}Error: Missing required dependencies: ${missing_deps[*]}${RESET}"
         echo "Please install them before running this script."
         exit 1
     fi
@@ -292,7 +309,7 @@ check_dependencies() {
     debug_log "All dependencies found"
 }
 
-# Display fancy ASCII art header with enhanced colors
+# Display fancy ASCII art header with retrowave colors
 show_header() {
     debug_log "Showing header"
     
@@ -301,9 +318,9 @@ show_header() {
         tput cup 0 0 2>/dev/null || true
     fi
     
-    # Using enhanced synthwave colors
+    # Using retrowave colors
     if [ "$USE_COLORS" -eq 1 ]; then
-        echo -e "${SYN_HEADER}"
+        echo -e "${RW_HEADER}"
         cat << "EOF"
  ██████╗██████╗ ██████╗ ████████╗████████╗
 ██╔════╝██╔══██╗██╔══██╗╚══██╔══╝╚══██╔══╝
@@ -312,9 +329,9 @@ show_header() {
 ██████╔╝██████╔╝██████╔╝   ██║      ██║   
 ╚═════╝ ╚═════╝ ╚═════╝    ╚═╝      ╚═╝   
 EOF
-        echo -e "${BRIGHTMAGENTA}░▒▓${MAGENTA}█${BRIGHTCYAN}▓▒░${BRIGHTMAGENTA}░▒▓${MAGENTA}█${BRIGHTCYAN}▓▒░${BRIGHTMAGENTA}░▒▓${MAGENTA}█${BRIGHTCYAN}▓▒░${BRIGHTMAGENTA}░▒▓${MAGENTA}█${BRIGHTCYAN}▓▒░"
-        echo -e "${SYN_HEADER}Simple Database Transfer Tool v$VERSION${RESET}"
-        echo -e "${BRIGHTCYAN}░▒▓${CYAN}█${BRIGHTMAGENTA}▓▒░${BRIGHTCYAN}░▒▓${CYAN}█${BRIGHTMAGENTA}▓▒░${BRIGHTCYAN}░▒▓${CYAN}█${BRIGHTMAGENTA}▓▒░${BRIGHTCYAN}░▒▓${CYAN}█${BRIGHTMAGENTA}▓▒░${RESET}"
+        echo -e "${BRIGHTCYAN}░▒▓${BRIGHTMAGENTA}█${BRIGHTCYAN}▓▒░${BRIGHTCYAN}░▒▓${BRIGHTMAGENTA}█${BRIGHTCYAN}▓▒░${BRIGHTCYAN}░▒▓${BRIGHTMAGENTA}█${BRIGHTCYAN}▓▒░${BRIGHTCYAN}░▒▓${BRIGHTMAGENTA}█${BRIGHTCYAN}▓▒░"
+        echo -e "${RW_HEADER}Simple Database Transfer Tool v$VERSION${RESET}"
+        echo -e "${BRIGHTCYAN}░▒▓${BRIGHTBLUE}█${BRIGHTCYAN}▓▒░${BRIGHTCYAN}░▒▓${BRIGHTBLUE}█${BRIGHTCYAN}▓▒░${BRIGHTCYAN}░▒▓${BRIGHTBLUE}█${BRIGHTCYAN}▓▒░${BRIGHTCYAN}░▒▓${BRIGHTBLUE}█${BRIGHTCYAN}▓▒░${RESET}"
     else
         # Plain text version for terminals without color support
         cat << EOF
@@ -359,7 +376,7 @@ error_exit() {
     if command -v dialog &>/dev/null && [ -f "$DIALOGRC" ]; then
         dialog --title "Error" --colors --msgbox "\Z1ERROR: $1\Z0" 8 60
     else
-        echo -e "${SYN_ALERT}ERROR: $1${RESET}" >&2
+        echo -e "${RW_ALERT}ERROR: $1${RESET}" >&2
     fi
     exit 1
 }
@@ -423,7 +440,7 @@ SQL_PATTERN="$SQL_PATTERN"
 LAST_DIRECTORIES="$LAST_DIRECTORIES"
 EOF
     chmod 600 "$CONFIG_FILE"  # Secure permissions for config file
-    dialog --colors --title "Configuration Saved" --msgbox "\Z5Settings have been saved to $CONFIG_FILE" 8 60
+    dialog --colors --title "Configuration Saved" --msgbox "\Z6Settings have been saved to $CONFIG_FILE" 8 60
 }
 
 # Install the script to the system
@@ -455,7 +472,7 @@ VERSION="$VERSION"
 EOF
     fi
     
-    dialog --colors --title "Installation Complete" --msgbox "\Z5SDBTT has been installed to $install_dir/$script_name\n\nYou can now run it by typing 'sdbtt' in your terminal." 10 70
+    dialog --colors --title "Installation Complete" --msgbox "\Z6SDBTT has been installed to $install_dir/$script_name\n\nYou can now run it by typing 'sdbtt' in your terminal." 10 70
     return 0
 }
 
@@ -523,7 +540,7 @@ update_script() {
             sleep 2
             kill $dialog_pid 2>/dev/null
             cd "$current_dir" || true
-            dialog --colors --title "No Updates" --msgbox "\Z5Your version ($VERSION) is already up to date." 8 60
+            dialog --colors --title "No Updates" --msgbox "\Z6Your version ($VERSION) is already up to date." 8 60
             rm -rf "$temp_dir"
             return 0
         fi
@@ -533,7 +550,7 @@ update_script() {
         kill $dialog_pid 2>/dev/null
         
         # Confirm update
-        dialog --colors --title "Update Available" --yesno "\Z5A new version is available.\n\nCurrent version: $VERSION\nNew version: $REPO_VERSION\n\nDo you want to update?" 10 60
+        dialog --colors --title "Update Available" --yesno "\Z6A new version is available.\n\nCurrent version: $VERSION\nNew version: $REPO_VERSION\n\nDo you want to update?" 10 60
         
         if [ $? -eq 0 ]; then
             # Use simpler display during update to avoid dialog issues
@@ -582,9 +599,9 @@ update_script() {
             fi
             
             if [ -n "$changelog" ]; then
-                dialog --colors --title "Update Successful" --msgbox "\Z5Updated from version $VERSION to $REPO_VERSION.\n\nChanges in this version:\n$changelog\n\nPlease restart the script for changes to take effect." 16 70
+                dialog --colors --title "Update Successful" --msgbox "\Z6Updated from version $VERSION to $REPO_VERSION.\n\nChanges in this version:\n$changelog\n\nPlease restart the script for changes to take effect." 16 70
             else
-                dialog --colors --title "Update Successful" --msgbox "\Z5Updated from version $VERSION to $REPO_VERSION.\n\nPlease restart the script for changes to take effect." 10 60
+                dialog --colors --title "Update Successful" --msgbox "\Z6Updated from version $VERSION to $REPO_VERSION.\n\nPlease restart the script for changes to take effect." 10 60
             fi
             
             # Cleanup and exit
@@ -592,7 +609,7 @@ update_script() {
             cd "$current_dir" || true
             exit 0
         else
-            dialog --colors --title "Update Cancelled" --msgbox "\Z5Update cancelled. Keeping version $VERSION." 8 60
+            dialog --colors --title "Update Cancelled" --msgbox "\Z6Update cancelled. Keeping version $VERSION." 8 60
             rm -rf "$temp_dir"
             cd "$current_dir" || true
             return 0
@@ -629,17 +646,17 @@ remove_script() {
         rm -f "$script_path"
         rm -rf "$conf_dir"
         
-        dialog --colors --title "Removal Complete" --msgbox "\Z5SDBTT has been removed from your system.\n\nYour personal configuration in $CONFIG_DIR has been kept.\nTo remove it completely, delete this directory manually." 10 70
+        dialog --colors --title "Removal Complete" --msgbox "\Z6SDBTT has been removed from your system.\n\nYour personal configuration in $CONFIG_DIR has been kept.\nTo remove it completely, delete this directory manually." 10 70
         return 0
     else
-        dialog --colors --title "Removal Cancelled" --msgbox "\Z5Removal cancelled." 8 60
+        dialog --colors --title "Removal Cancelled" --msgbox "\Z6Removal cancelled." 8 60
         return 0
     fi
 }
 
 # Check for updates and notify user
 check_for_updates() {
-    dialog --colors --title "Checking for Updates" --infobox "\Z5Checking for updates from $REPO_URL..." 5 60
+    dialog --colors --title "Checking for Updates" --infobox "\Z6Checking for updates from $REPO_URL..." 5 60
     
     # Create temp directory
     local temp_dir="/tmp/sdbtt_update_check_$(date +%s)"
@@ -672,10 +689,10 @@ check_for_updates() {
     
     # Compare versions
     if [ "$VERSION" = "$REPO_VERSION" ]; then
-        dialog --colors --title "No Updates" --msgbox "\Z5Your version ($VERSION) is already up to date." 8 60
+        dialog --colors --title "No Updates" --msgbox "\Z6Your version ($VERSION) is already up to date." 8 60
         return 0
     else
-        dialog --colors --title "Update Available" --yesno "\Z5A new version is available.\n\nCurrent version: $VERSION\nNew version: $REPO_VERSION\n\nDo you want to update now?" 10 60
+        dialog --colors --title "Update Available" --yesno "\Z6A new version is available.\n\nCurrent version: $VERSION\nNew version: $REPO_VERSION\n\nDo you want to update now?" 10 60
         
         if [ $? -eq 0 ]; then
             update_script
@@ -693,15 +710,15 @@ show_about() {
 \n
 A tool for importing and managing MySQL databases with ease.
 \n
-\Z5Features:\Z0
-- Interactive TUI with enhanced Synthwave theme
+\Z6Features:\Z0
+- Interactive TUI with enhanced Retrowave theme
 - Directory navigation and selection
 - Secure password management
 - Multiple import methods for compatibility
 - MySQL database administration
 - Auto-update from GitHub
 \n
-\Z5GitHub:\Z0 $REPO_URL
+\Z6GitHub:\Z0 $REPO_URL
 \n
 \Z5Created by:\Z0 eraxe
 " 20 70
@@ -716,7 +733,7 @@ mysql_admin_menu() {
     
     while true; do
         local choice
-        choice=$(dialog --colors --clear --backtitle "\Z5SDBTT MySQL Administration\Z0" \
+        choice=$(dialog --colors --clear --backtitle "\Z6SDBTT MySQL Administration\Z0" \
             --title "MySQL Administration" --menu "Choose an option:" 15 60 8 \
             "1" "\Z6List All Databases\Z0" \
             "2" "\Z6List All Users\Z0" \
@@ -845,7 +862,7 @@ optimize_tables() {
     tables=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "SHOW TABLES FROM \`$db_name\`;" 2>/dev/null | tail -n +2)
     
     if [ -z "$tables" ]; then
-        dialog --colors --title "No Tables" --msgbox "\Z5Database '$db_name' has no tables to optimize." 8 60
+        dialog --colors --title "No Tables" --msgbox "\Z6Database '$db_name' has no tables to optimize." 8 60
         return
     fi
     
@@ -906,7 +923,7 @@ optimize_tables() {
         kill $tail_pid 2>/dev/null || true
         
         # Show completion dialog
-        dialog --colors --title "Optimization Complete" --msgbox "\Z5All tables in database '$db_name' have been optimized.\n\nSee full details in the optimization log." 8 70
+        dialog --colors --title "Optimization Complete" --msgbox "\Z6All tables in database '$db_name' have been optimized.\n\nSee full details in the optimization log." 8 70
         
         # Display the log in a scrollable viewer
         dialog --colors --title "Optimization Results" --textbox "$opt_log_file" 20 76
@@ -943,7 +960,7 @@ check_database_integrity() {
     tables=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "SHOW TABLES FROM \`$db_name\`;" 2>/dev/null | tail -n +2)
     
     if [ -z "$tables" ]; then
-        dialog --colors --title "No Tables" --msgbox "\Z5Database '$db_name' has no tables to check." 8 60
+        dialog --colors --title "No Tables" --msgbox "\Z6Database '$db_name' has no tables to check." 8 60
         return
     fi
     
@@ -1005,7 +1022,7 @@ check_database_integrity() {
         kill $tail_pid 2>/dev/null || true
         
         # Show completion dialog
-        dialog --colors --title "Integrity Check Complete" --msgbox "\Z5All tables in database '$db_name' have been checked.\n\nSee full details in the check log." 8 70
+        dialog --colors --title "Integrity Check Complete" --msgbox "\Z6All tables in database '$db_name' have been checked.\n\nSee full details in the check log." 8 70
         
         # Display the log in a scrollable viewer
         dialog --colors --title "Integrity Check Results" --textbox "$check_log_file" 20 76
@@ -1063,20 +1080,20 @@ show_main_menu() {
     debug_log "Displaying main menu"
     
     while true; do
-        # Try to use a simpler menu format without colors while troubleshooting
-        choice=$(dialog --clear --backtitle "SDBTT - Simple Database Transfer Tool v$VERSION" \
+        # Try to use a simpler menu format with retrowave colors
+        choice=$(dialog --colors --clear --backtitle "\Z6SDBTT - Simple Database Transfer Tool v$VERSION\Z0" \
             --title "Main Menu" --menu "Choose an option:" 18 60 11 \
-            "1" "Import Databases" \
-            "2" "Configure Settings" \
-            "3" "Browse & Select Directories" \
-            "4" "MySQL Administration" \
-            "5" "View Logs" \
-            "6" "Save Current Settings" \
-            "7" "Load Saved Settings" \
-            "8" "Check for Updates" \
-            "9" "About SDBTT" \
-            "10" "Help" \
-            "0" "Exit" \
+            "1" "\Z6Import Databases\Z0" \
+            "2" "\Z6Configure Settings\Z0" \
+            "3" "\Z6Browse & Select Directories\Z0" \
+            "4" "\Z6MySQL Administration\Z0" \
+            "5" "\Z6View Logs\Z0" \
+            "6" "\Z6Save Current Settings\Z0" \
+            "7" "\Z6Load Saved Settings\Z0" \
+            "8" "\Z6Check for Updates\Z0" \
+            "9" "\Z6About SDBTT\Z0" \
+            "10" "\Z6Help\Z0" \
+            "0" "\Z1Exit\Z0" \
             3>&1 1>&2 2>&3)
         
         local menu_exit=$?
@@ -1100,9 +1117,9 @@ show_main_menu() {
             6) save_config ;;
             7) 
                 if load_config; then
-                    dialog --title "Configuration Loaded" --msgbox "Settings have been loaded from $CONFIG_FILE" 8 60
+                    dialog --colors --title "Configuration Loaded" --msgbox "\Z6Settings have been loaded from $CONFIG_FILE" 8 60
                 else
-                    dialog --title "Error" --msgbox "No saved configuration found at $CONFIG_FILE" 8 60
+                    dialog --colors --title "Error" --msgbox "\Z1No saved configuration found at $CONFIG_FILE" 8 60
                 fi
                 ;;
             8) check_for_updates ;;
@@ -1117,7 +1134,7 @@ show_main_menu() {
             *) 
                 # User pressed Cancel or ESC
                 if [ -z "$choice" ]; then
-                    dialog --title "Exit Confirmation" --yesno "Are you sure you want to exit?" 8 60
+                    dialog --colors --title "Exit Confirmation" --yesno "Are you sure you want to exit?" 8 60
                     if [ $? -eq 0 ]; then
                         # Clean up and reset terminal without showing goodbye message
                         rm -f "$DIALOGRC" 2>/dev/null
@@ -1135,7 +1152,7 @@ configure_settings() {
     local settings_menu
     
     while true; do
-        settings_menu=$(dialog --colors --clear --backtitle "\Z5SDBTT - Configuration\Z0" \
+        settings_menu=$(dialog --colors --clear --backtitle "\Z6SDBTT - Configuration\Z0" \
             --title "Configure Settings" --menu "Choose a setting to configure:" 15 60 6 \
             "1" "\Z5MySQL Username\Z0 (Current: ${MYSQL_USER:-not set})" \
             "2" "\Z5Database Owner\Z0 (Current: ${DB_OWNER:-not set})" \
@@ -1171,7 +1188,7 @@ configure_settings() {
                     if ! mysql -u "${MYSQL_USER:-root}" -p"$password" -e "SELECT 1" >/dev/null 2>&1; then
                         dialog --colors --title "Connection Error" --msgbox "\Z1Failed to connect to MySQL server. Please check credentials." 8 60
                     else
-                        dialog --colors --title "Connection Success" --msgbox "\Z5Successfully connected to MySQL server and securely stored password." 8 60
+                        dialog --colors --title "Connection Success" --msgbox "\Z6Successfully connected to MySQL server and securely stored password." 8 60
                     fi
                 fi
                 ;;
@@ -1221,7 +1238,7 @@ browse_directories() {
         options+=("SELECT_DIR" "\Z2✅ [ Select Current Directory ]\Z0")
         options+=("BACK" "\Z1⬅️ [ Back to Main Menu ]\Z0")
         
-        selection=$(dialog --colors --clear --backtitle "\Z5SDBTT - Directory Browser\Z0" \
+        selection=$(dialog --colors --clear --backtitle "\Z6SDBTT - Directory Browser\Z0" \
             --title "Directory Browser" \
             --menu "Current: \Z5$current_dir\Z0\n\nNavigate to directory containing SQL files:" 20 76 12 \
             "${options[@]}" 3>&1 1>&2 2>&3)
@@ -1229,7 +1246,7 @@ browse_directories() {
         case $selection in
             "SELECT_DIR")
                 SQL_DIR="$current_dir"
-                dialog --colors --title "Directory Selected" --msgbox "\Z5Selected directory: $SQL_DIR" 8 60
+                dialog --colors --title "Directory Selected" --msgbox "\Z6Selected directory: $SQL_DIR" 8 60
                 
                 # Add to last directories list (max 5)
                 if [ -z "$LAST_DIRECTORIES" ]; then
@@ -1254,7 +1271,7 @@ browse_directories() {
                 if [ -d "$selection" ]; then
                     current_dir="$selection"
                 elif [ -f "$selection" ]; then
-                    dialog --colors --title "File Selected" --msgbox "\Z5Selected file: $selection\n\nThis is a file, not a directory. Please select a directory." 10 60
+                    dialog --colors --title "File Selected" --msgbox "\Z6Selected file: $selection\n\nThis is a file, not a directory. Please select a directory." 10 60
                 fi
                 ;;
         esac
@@ -1346,7 +1363,7 @@ import_databases_menu() {
     
     # Options for how to process the files
     local process_choice
-    process_choice=$(dialog --colors --clear --backtitle "\Z5SDBTT - Import\Z0" \
+    process_choice=$(dialog --colors --clear --backtitle "\Z6SDBTT - Import\Z0" \
         --title "Process SQL Files" \
         --menu "Found \Z5${#sql_files[@]}\Z0 SQL files. Choose an option:" 15 76 4 \
         "1" "\Z6List and select individual files to import\Z0" \
@@ -1359,7 +1376,7 @@ import_databases_menu() {
         1)
             # Multi-select dialog for individual files
             local selected_files
-            selected_files=$(dialog --colors --clear --backtitle "\Z5SDBTT - Import\Z0" \
+            selected_files=$(dialog --colors --clear --backtitle "\Z6SDBTT - Import\Z0" \
                 --title "Select SQL Files to Import" \
                 --checklist "Select files to import:" 20 76 12 \
                 "${sql_files[@]}" 3>&1 1>&2 2>&3)
@@ -1664,14 +1681,14 @@ start_import_process() {
         # Kill the dialog process
         kill $gauge_pid 2>/dev/null || true
         
-        # Show the result summary without colors
-        dialog --title "Import Complete" --msgbox "Import process complete.\n\nTotal databases processed: $db_count\nSuccessful imports: $success_count\nFailed imports: $failure_count\n\nLog file saved to: $LOG_FILE" 12 70
+        # Show the result summary
+        dialog --colors --title "Import Complete" --msgbox "\Z6Import process complete.\n\nTotal databases processed: \Z5$db_count\Z0\nSuccessful imports: \Z5$success_count\Z0\nFailed imports: \Z1$failure_count\Z0\n\nLog file saved to: \Z5$LOG_FILE\Z0" 12 70
         
         # Show the complete log if there were failures
         if [ $failure_count -gt 0 ]; then
-            dialog --title "Import Log" --yesno "Some imports failed. Would you like to view the complete log?" 8 60
+            dialog --colors --title "Import Log" --yesno "\Z1Some imports failed. Would you like to view the complete log?\Z0" 8 60
             if [ $? -eq 0 ]; then
-                dialog --title "Complete Import Log" --textbox "$LOG_FILE" 25 78
+                dialog --colors --title "Complete Import Log" --textbox "$LOG_FILE" 25 78
             fi
         fi
         
@@ -1713,7 +1730,7 @@ select_from_recent_dirs() {
     dirs+=("BACK" "\Z1⬅️ [ Back to Main Menu ]\Z0")
     
     local selection
-    selection=$(dialog --colors --clear --backtitle "\Z5SDBTT - Recent Directories\Z0" \
+    selection=$(dialog --colors --clear --backtitle "\Z6SDBTT - Recent Directories\Z0" \
         --title "Recent Directories" \
         --menu "Select a recently used directory:" 15 76 8 \
         "${dirs[@]}" 3>&1 1>&2 2>&3)
@@ -1724,7 +1741,7 @@ select_from_recent_dirs() {
             ;;
         *)
             SQL_DIR="$selection"
-            dialog --colors --title "Directory Selected" --msgbox "\Z5Selected directory: $SQL_DIR" 8 60
+            dialog --colors --title "Directory Selected" --msgbox "\Z6Selected directory: $SQL_DIR" 8 60
             return 0
             ;;
     esac
@@ -1752,7 +1769,7 @@ view_logs() {
     logs+=("BACK" "\Z1⬅️ [ Back to Main Menu ]\Z0")
     
     local selection
-    selection=$(dialog --colors --clear --backtitle "\Z5SDBTT - Logs\Z0" \
+    selection=$(dialog --colors --clear --backtitle "\Z6SDBTT - Logs\Z0" \
         --title "View Logs" \
         --menu "Select a log file to view:" 15 76 8 \
         "${logs[@]}" 3>&1 1>&2 2>&3)
@@ -1801,7 +1818,7 @@ show_help() {
 
 This tool helps you import MySQL databases from SQL files with the following features:
 
-\Z6* Interactive TUI with enhanced Synthwave theme
+\Z6* Interactive TUI with enhanced Retrowave theme
 * Directory navigation and selection 
 * Configuration management with secure password storage
 * Automatic charset conversion
