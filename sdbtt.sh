@@ -1,7 +1,7 @@
 #!/bin/bash
 # SDBTT: Simple Database Transfer Tool
 # Enhanced MySQL Database Import Script with Retrowave Theme
-# Version: 1.0.3
+# Version: 1.1.0
 
 # Default configuration
 CONFIG_DIR="$HOME/.sdbtt"
@@ -11,7 +11,7 @@ LOG_DIR="$CONFIG_DIR/logs"
 LOG_FILE="$LOG_DIR/sdbtt_$(date +%Y%m%d_%H%M%S).log"
 DISPLAY_LOG_FILE="/tmp/sdbtt_display_log_$(date +%Y%m%d_%H%M%S)"
 PASS_STORE="$CONFIG_DIR/.passstore"
-VERSION="1.0.3"
+VERSION="1.1.0"
 REPO_URL="https://github.com/eraxe/sdbtt"
 
 # Determine if we can use terminal colors
@@ -294,7 +294,7 @@ check_dependencies() {
     
     local missing_deps=()
     
-    for cmd in dialog mysql mysqldump sed awk git openssl curl; do
+    for cmd in dialog mysql mysqldump sed awk git openssl curl iconv; do
         if ! command -v "$cmd" &> /dev/null; then
             missing_deps+=("$cmd")
         fi
@@ -717,6 +717,8 @@ A tool for importing and managing MySQL databases with ease.
 - Multiple import methods for compatibility
 - MySQL database administration
 - Auto-update from GitHub
+- Transfer and replace databases
+- MySQL user management
 \n
 \Z6GitHub:\Z0 $REPO_URL
 \n
@@ -734,7 +736,7 @@ mysql_admin_menu() {
     while true; do
         local choice
         choice=$(dialog --colors --clear --backtitle "\Z6SDBTT MySQL Administration\Z0" \
-            --title "MySQL Administration" --menu "Choose an option:" 15 60 8 \
+            --title "MySQL Administration" --menu "Choose an option:" 15 60 9 \
             "1" "\Z6List All Databases\Z0" \
             "2" "\Z6List All Users\Z0" \
             "3" "\Z6Show User Privileges\Z0" \
@@ -742,7 +744,8 @@ mysql_admin_menu() {
             "5" "\Z6Optimize Tables\Z0" \
             "6" "\Z6Check Database Integrity\Z0" \
             "7" "\Z6MySQL Status\Z0" \
-            "8" "\Z1Back to Main Menu\Z0" \
+            "8" "\Z6Manage MySQL Users\Z0" \
+            "9" "\Z1Back to Main Menu\Z0" \
             3>&1 1>&2 2>&3)
             
         case $choice in
@@ -753,7 +756,8 @@ mysql_admin_menu() {
             5) optimize_tables ;;
             6) check_database_integrity ;;
             7) show_mysql_status ;;
-            8|"") break ;;
+            8) manage_mysql_users ;;
+            9|"") break ;;
         esac
     done
 }
@@ -1073,6 +1077,436 @@ show_mysql_status() {
     dialog --colors --title "MySQL Server Status" --msgbox "$formatted_result" 20 70
 }
 
+# Manage MySQL users with enhanced UI
+manage_mysql_users() {
+    while true; do
+        local choice
+        choice=$(dialog --colors --clear --backtitle "\Z6SDBTT MySQL User Management\Z0" \
+            --title "MySQL User Management" --menu "Choose an option:" 15 60 6 \
+            "1" "\Z6Create New MySQL User\Z0" \
+            "2" "\Z6Change User Password\Z0" \
+            "3" "\Z6Delete MySQL User\Z0" \
+            "4" "\Z6Grant Privileges to User\Z0" \
+            "5" "\Z6Revoke Privileges from User\Z0" \
+            "6" "\Z1Back to Admin Menu\Z0" \
+            3>&1 1>&2 2>&3)
+            
+        case $choice in
+            1) create_mysql_user ;;
+            2) change_mysql_password ;;
+            3) delete_mysql_user ;;
+            4) grant_user_privileges ;;
+            5) revoke_user_privileges ;;
+            6|"") break ;;
+        esac
+    done
+}
+
+# Create a new MySQL user with enhanced UI
+create_mysql_user() {
+    # Get system/DirectAdmin users if available
+    local system_users=()
+    
+    if command -v getent >/dev/null 2>&1; then
+        # Get real system users with UID >= 1000
+        while IFS=: read -r user _ uid _; do
+            if [ "$uid" -ge 1000 ] && [ "$uid" -ne 65534 ]; then
+                system_users+=("$user")
+            fi
+        done < <(getent passwd)
+    fi
+    
+    # If DirectAdmin environment
+    if [ -d "/usr/local/directadmin" ]; then
+        if [ -f "/usr/local/directadmin/data/users/users.list" ]; then
+            while IFS= read -r user; do
+                # Add only if not already in the list
+                if ! [[ " ${system_users[@]} " =~ " ${user} " ]]; then
+                    system_users+=("$user")
+                fi
+            done < <(cat "/usr/local/directadmin/data/users/users.list")
+        fi
+    fi
+    
+    # If no system users found, allow manual entry
+    local system_user
+    if [ ${#system_users[@]} -eq 0 ]; then
+        system_user=$(dialog --colors --title "System User" --inputbox "Enter system/DirectAdmin username this MySQL user belongs to:" 8 60 3>&1 1>&2 2>&3)
+        if [ -z "$system_user" ]; then
+            return
+        fi
+    else
+        # Create a menu to select from available system users
+        local options=()
+        for user in "${system_users[@]}"; do
+            options+=("$user" "System user: $user")
+        done
+        options+=("manual" "Enter a different username")
+        
+        system_user=$(dialog --colors --title "Select System User" --menu "Select the system user this MySQL user belongs to:" 15 60 8 "${options[@]}" 3>&1 1>&2 2>&3)
+        
+        if [ -z "$system_user" ]; then
+            return
+        fi
+        
+        if [ "$system_user" = "manual" ]; then
+            system_user=$(dialog --colors --title "System User" --inputbox "Enter system/DirectAdmin username this MySQL user belongs to:" 8 60 3>&1 1>&2 2>&3)
+            if [ -z "$system_user" ]; then
+                return
+            fi
+        fi
+    fi
+    
+    # Get MySQL username
+    local mysql_user
+    mysql_user=$(dialog --colors --title "MySQL Username" --inputbox "Enter new MySQL username (or press Enter to use default format ${system_user}_user):" 8 70 3>&1 1>&2 2>&3)
+    
+    if [ -z "$mysql_user" ]; then
+        mysql_user="${system_user}_user"
+    fi
+    
+    # Check if user already exists
+    local user_exists
+    user_exists=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "SELECT User FROM mysql.user WHERE User='$mysql_user';" 2>/dev/null | grep -c "$mysql_user")
+    
+    if [ "$user_exists" -gt 0 ]; then
+        dialog --colors --title "Error" --msgbox "\Z1MySQL user '$mysql_user' already exists." 8 60
+        return
+    fi
+    
+    # Get password
+    local password
+    password=$(dialog --colors --title "MySQL Password" --passwordbox "Enter password for '$mysql_user':" 8 60 3>&1 1>&2 2>&3)
+    
+    if [ -z "$password" ]; then
+        dialog --colors --title "Error" --msgbox "\Z1Password cannot be empty." 8 60
+        return
+    fi
+    
+    # Confirm password
+    local confirm_password
+    confirm_password=$(dialog --colors --title "Confirm Password" --passwordbox "Confirm password for '$mysql_user':" 8 60 3>&1 1>&2 2>&3)
+    
+    if [ "$password" != "$confirm_password" ]; then
+        dialog --colors --title "Error" --msgbox "\Z1Passwords do not match." 8 60
+        return
+    fi
+    
+    # Create the user
+    local create_result
+    create_result=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "CREATE USER '$mysql_user'@'localhost' IDENTIFIED BY '$password';" 2>&1)
+    
+    if [ $? -ne 0 ]; then
+        dialog --colors --title "Error" --msgbox "\Z1Failed to create MySQL user '$mysql_user'.\n\nError: $create_result" 10 60
+        return
+    fi
+    
+    # Ask if user wants to grant privileges to any database
+    dialog --colors --title "Grant Privileges" --yesno "Do you want to grant privileges to '$mysql_user' on any database?" 8 60
+    
+    if [ $? -eq 0 ]; then
+        # Get list of databases
+        local databases
+        databases=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "SHOW DATABASES;" 2>/dev/null | grep -v -E "^(Database|information_schema|performance_schema|mysql|sys)$")
+        
+        if [ -z "$databases" ]; then
+            dialog --colors --title "No Databases" --msgbox "\Z1No user databases found." 8 60
+            return
+        fi
+        
+        # Create options for database selection
+        local db_options=()
+        for db in $databases; do
+            db_options+=("$db" "Database: $db")
+        done
+        
+        # Allow selecting multiple databases
+        local selected_dbs
+        selected_dbs=$(dialog --colors --title "Select Databases" --checklist "Select databases to grant privileges to '$mysql_user':" 15 60 8 "${db_options[@]}" 3>&1 1>&2 2>&3)
+        
+        if [ -n "$selected_dbs" ]; then
+            # Remove quotes from the output
+            selected_dbs=$(echo "$selected_dbs" | tr -d '"')
+            
+            for db in $selected_dbs; do
+                mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "GRANT ALL PRIVILEGES ON \`$db\`.* TO '$mysql_user'@'localhost';" 2>/dev/null
+                
+                if [ $? -ne 0 ]; then
+                    dialog --colors --title "Warning" --msgbox "\Z3Warning: Failed to grant privileges on database '$db' to user '$mysql_user'." 8 70
+                fi
+            done
+            
+            # Flush privileges
+            mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "FLUSH PRIVILEGES;" 2>/dev/null
+            
+            dialog --colors --title "Success" --msgbox "\Z6MySQL user '$mysql_user' created successfully and granted privileges on selected databases." 8 70
+        else
+            dialog --colors --title "Success" --msgbox "\Z6MySQL user '$mysql_user' created successfully without any database privileges." 8 70
+        fi
+    else
+        dialog --colors --title "Success" --msgbox "\Z6MySQL user '$mysql_user' created successfully." 8 70
+    fi
+}
+
+# Change MySQL user password
+change_mysql_password() {
+    # Get list of MySQL users
+    local users
+    users=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "SELECT User FROM mysql.user WHERE User NOT IN ('root', 'debian-sys-maint', 'mysql.sys', 'mysql.session', 'mysql.infoschema');" 2>/dev/null | grep -v "User")
+    
+    if [ -z "$users" ]; then
+        dialog --colors --title "No Users" --msgbox "\Z1No MySQL users found." 8 60
+        return
+    fi
+    
+    # Create options for user selection
+    local user_options=()
+    for user in $users; do
+        user_options+=("$user" "MySQL user: $user")
+    done
+    
+    # Select user
+    local selected_user
+    selected_user=$(dialog --colors --title "Select User" --menu "Select MySQL user to change password:" 15 60 8 "${user_options[@]}" 3>&1 1>&2 2>&3)
+    
+    if [ -z "$selected_user" ]; then
+        return
+    fi
+    
+    # Get new password
+    local password
+    password=$(dialog --colors --title "New Password" --passwordbox "Enter new password for '$selected_user':" 8 60 3>&1 1>&2 2>&3)
+    
+    if [ -z "$password" ]; then
+        dialog --colors --title "Error" --msgbox "\Z1Password cannot be empty." 8 60
+        return
+    fi
+    
+    # Confirm password
+    local confirm_password
+    confirm_password=$(dialog --colors --title "Confirm Password" --passwordbox "Confirm new password for '$selected_user':" 8 60 3>&1 1>&2 2>&3)
+    
+    if [ "$password" != "$confirm_password" ]; then
+        dialog --colors --title "Error" --msgbox "\Z1Passwords do not match." 8 60
+        return
+    fi
+    
+    # Change password
+    local result
+    result=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "ALTER USER '$selected_user'@'localhost' IDENTIFIED BY '$password';" 2>&1)
+    
+    if [ $? -ne 0 ]; then
+        dialog --colors --title "Error" --msgbox "\Z1Failed to change password for '$selected_user'.\n\nError: $result" 10 60
+        return
+    fi
+    
+    # Flush privileges
+    mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "FLUSH PRIVILEGES;" 2>/dev/null
+    
+    dialog --colors --title "Success" --msgbox "\Z6Password for MySQL user '$selected_user' changed successfully." 8 70
+}
+
+# Delete MySQL user
+delete_mysql_user() {
+    # Get list of MySQL users
+    local users
+    users=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "SELECT User FROM mysql.user WHERE User NOT IN ('root', 'debian-sys-maint', 'mysql.sys', 'mysql.session', 'mysql.infoschema');" 2>/dev/null | grep -v "User")
+    
+    if [ -z "$users" ]; then
+        dialog --colors --title "No Users" --msgbox "\Z1No MySQL users found." 8 60
+        return
+    fi
+    
+    # Create options for user selection
+    local user_options=()
+    for user in $users; do
+        user_options+=("$user" "MySQL user: $user")
+    done
+    
+    # Select user
+    local selected_user
+    selected_user=$(dialog --colors --title "Select User" --menu "Select MySQL user to delete:" 15 60 8 "${user_options[@]}" 3>&1 1>&2 2>&3)
+    
+    if [ -z "$selected_user" ]; then
+        return
+    fi
+    
+    # Confirm deletion
+    dialog --colors --title "Confirm Deletion" --yesno "\Z1Are you sure you want to delete MySQL user '$selected_user'?\n\nThis action cannot be undone." 8 70
+    
+    if [ $? -ne 0 ]; then
+        return
+    fi
+    
+    # Delete user
+    local result
+    result=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "DROP USER '$selected_user'@'localhost';" 2>&1)
+    
+    if [ $? -ne 0 ]; then
+        dialog --colors --title "Error" --msgbox "\Z1Failed to delete MySQL user '$selected_user'.\n\nError: $result" 10 60
+        return
+    fi
+    
+    # Flush privileges
+    mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "FLUSH PRIVILEGES;" 2>/dev/null
+    
+    dialog --colors --title "Success" --msgbox "\Z6MySQL user '$selected_user' deleted successfully." 8 70
+}
+
+# Grant privileges to user
+grant_user_privileges() {
+    # Get list of MySQL users
+    local users
+    users=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "SELECT User FROM mysql.user WHERE User NOT IN ('root', 'debian-sys-maint', 'mysql.sys', 'mysql.session', 'mysql.infoschema');" 2>/dev/null | grep -v "User")
+    
+    if [ -z "$users" ]; then
+        dialog --colors --title "No Users" --msgbox "\Z1No MySQL users found." 8 60
+        return
+    fi
+    
+    # Create options for user selection
+    local user_options=()
+    for user in $users; do
+        user_options+=("$user" "MySQL user: $user")
+    done
+    
+    # Select user
+    local selected_user
+    selected_user=$(dialog --colors --title "Select User" --menu "Select MySQL user to grant privileges:" 15 60 8 "${user_options[@]}" 3>&1 1>&2 2>&3)
+    
+    if [ -z "$selected_user" ]; then
+        return
+    fi
+    
+    # Get list of databases
+    local databases
+    databases=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "SHOW DATABASES;" 2>/dev/null | grep -v -E "^(Database|information_schema|performance_schema|mysql|sys)$")
+    
+    if [ -z "$databases" ]; then
+        dialog --colors --title "No Databases" --msgbox "\Z1No user databases found." 8 60
+        return
+    fi
+    
+    # Create options for database selection
+    local db_options=()
+    for db in $databases; do
+        db_options+=("$db" "Database: $db")
+    done
+    
+    # Allow selecting multiple databases
+    local selected_dbs
+    selected_dbs=$(dialog --colors --title "Select Databases" --checklist "Select databases to grant privileges to '$selected_user':" 15 60 8 "${db_options[@]}" 3>&1 1>&2 2>&3)
+    
+    if [ -z "$selected_dbs" ]; then
+        return
+    fi
+    
+    # Remove quotes from the output
+    selected_dbs=$(echo "$selected_dbs" | tr -d '"')
+    
+    # Choose privilege type
+    local privilege_type
+    privilege_type=$(dialog --colors --title "Privilege Type" --menu "Select type of privileges to grant:" 15 60 3 \
+        "ALL" "All privileges (SELECT, INSERT, UPDATE, DELETE, etc.)" \
+        "RO" "Read-only privileges (SELECT)" \
+        "RW" "Read-write privileges (SELECT, INSERT, UPDATE, DELETE)" \
+        3>&1 1>&2 2>&3)
+    
+    if [ -z "$privilege_type" ]; then
+        return
+    fi
+    
+    # Grant privileges based on type
+    for db in $selected_dbs; do
+        case $privilege_type in
+            "ALL")
+                mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "GRANT ALL PRIVILEGES ON \`$db\`.* TO '$selected_user'@'localhost';" 2>/dev/null
+                ;;
+            "RO")
+                mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "GRANT SELECT ON \`$db\`.* TO '$selected_user'@'localhost';" 2>/dev/null
+                ;;
+            "RW")
+                mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "GRANT SELECT, INSERT, UPDATE, DELETE ON \`$db\`.* TO '$selected_user'@'localhost';" 2>/dev/null
+                ;;
+        esac
+        
+        if [ $? -ne 0 ]; then
+            dialog --colors --title "Warning" --msgbox "\Z3Warning: Failed to grant privileges on database '$db' to user '$selected_user'." 8 70
+        fi
+    done
+    
+    # Flush privileges
+    mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "FLUSH PRIVILEGES;" 2>/dev/null
+    
+    dialog --colors --title "Success" --msgbox "\Z6Privileges granted to MySQL user '$selected_user' on selected databases." 8 70
+}
+
+# Revoke privileges from user
+revoke_user_privileges() {
+    # Get list of MySQL users
+    local users
+    users=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "SELECT User FROM mysql.user WHERE User NOT IN ('root', 'debian-sys-maint', 'mysql.sys', 'mysql.session', 'mysql.infoschema');" 2>/dev/null | grep -v "User")
+    
+    if [ -z "$users" ]; then
+        dialog --colors --title "No Users" --msgbox "\Z1No MySQL users found." 8 60
+        return
+    fi
+    
+    # Create options for user selection
+    local user_options=()
+    for user in $users; do
+        user_options+=("$user" "MySQL user: $user")
+    done
+    
+    # Select user
+    local selected_user
+    selected_user=$(dialog --colors --title "Select User" --menu "Select MySQL user to revoke privileges:" 15 60 8 "${user_options[@]}" 3>&1 1>&2 2>&3)
+    
+    if [ -z "$selected_user" ]; then
+        return
+    fi
+    
+    # Get list of databases
+    local databases
+    databases=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "SHOW DATABASES;" 2>/dev/null | grep -v -E "^(Database|information_schema|performance_schema|mysql|sys)$")
+    
+    if [ -z "$databases" ]; then
+        dialog --colors --title "No Databases" --msgbox "\Z1No user databases found." 8 60
+        return
+    fi
+    
+    # Create options for database selection
+    local db_options=()
+    for db in $databases; do
+        db_options+=("$db" "Database: $db")
+    done
+    
+    # Allow selecting multiple databases
+    local selected_dbs
+    selected_dbs=$(dialog --colors --title "Select Databases" --checklist "Select databases to revoke privileges from '$selected_user':" 15 60 8 "${db_options[@]}" 3>&1 1>&2 2>&3)
+    
+    if [ -z "$selected_dbs" ]; then
+        return
+    fi
+    
+    # Remove quotes from the output
+    selected_dbs=$(echo "$selected_dbs" | tr -d '"')
+    
+    # Revoke privileges
+    for db in $selected_dbs; do
+        mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "REVOKE ALL PRIVILEGES ON \`$db\`.* FROM '$selected_user'@'localhost';" 2>/dev/null
+        
+        if [ $? -ne 0 ]; then
+            dialog --colors --title "Warning" --msgbox "\Z3Warning: Failed to revoke privileges on database '$db' from user '$selected_user'." 8 70
+        fi
+    done
+    
+    # Flush privileges
+    mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "FLUSH PRIVILEGES;" 2>/dev/null
+    
+    dialog --colors --title "Success" --msgbox "\Z6Privileges revoked from MySQL user '$selected_user' on selected databases." 8 70
+}
+
 # Display main menu with enhanced theming
 show_main_menu() {
     local choice
@@ -1082,17 +1516,18 @@ show_main_menu() {
     while true; do
         # Try to use a simpler menu format with retrowave colors
         choice=$(dialog --colors --clear --backtitle "\Z6SDBTT - Simple Database Transfer Tool v$VERSION\Z0" \
-            --title "Main Menu" --menu "Choose an option:" 18 60 11 \
+            --title "Main Menu" --menu "Choose an option:" 18 60 12 \
             "1" "\Z6Import Databases\Z0" \
-            "2" "\Z6Configure Settings\Z0" \
-            "3" "\Z6Browse & Select Directories\Z0" \
-            "4" "\Z6MySQL Administration\Z0" \
-            "5" "\Z6View Logs\Z0" \
-            "6" "\Z6Save Current Settings\Z0" \
-            "7" "\Z6Load Saved Settings\Z0" \
-            "8" "\Z6Check for Updates\Z0" \
-            "9" "\Z6About SDBTT\Z0" \
-            "10" "\Z6Help\Z0" \
+            "2" "\Z6Transfer and Replace Database\Z0" \
+            "3" "\Z6Configure Settings\Z0" \
+            "4" "\Z6Browse & Select Directories\Z0" \
+            "5" "\Z6MySQL Administration\Z0" \
+            "6" "\Z6View Logs\Z0" \
+            "7" "\Z6Save Current Settings\Z0" \
+            "8" "\Z6Load Saved Settings\Z0" \
+            "9" "\Z6Check for Updates\Z0" \
+            "10" "\Z6About SDBTT\Z0" \
+            "11" "\Z6Help\Z0" \
             "0" "\Z1Exit\Z0" \
             3>&1 1>&2 2>&3)
         
@@ -1110,21 +1545,22 @@ show_main_menu() {
             
         case $choice in
             1) import_databases_menu ;;
-            2) configure_settings ;;
-            3) browse_directories ;;
-            4) mysql_admin_menu ;;
-            5) view_logs ;;
-            6) save_config ;;
-            7) 
+            2) transfer_replace_database ;;
+            3) configure_settings ;;
+            4) browse_directories ;;
+            5) mysql_admin_menu ;;
+            6) view_logs ;;
+            7) save_config ;;
+            8) 
                 if load_config; then
                     dialog --colors --title "Configuration Loaded" --msgbox "\Z6Settings have been loaded from $CONFIG_FILE" 8 60
                 else
                     dialog --colors --title "Error" --msgbox "\Z1No saved configuration found at $CONFIG_FILE" 8 60
                 fi
                 ;;
-            8) check_for_updates ;;
-            9) show_about ;;
-            10) show_help ;;
+            9) check_for_updates ;;
+            10) show_about ;;
+            11) show_help ;;
             0) 
                 # Clean up and reset terminal without showing goodbye message
                 rm -f "$DIALOGRC" 2>/dev/null
@@ -1482,46 +1918,156 @@ create_database() {
         error_exit "Failed to create database $db_name"
     }
     
-    # Set encoding parameters
-    mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" "$db_name" -e "SET NAMES utf8mb4; SET character_set_client = utf8mb4;" 2>> "$LOG_FILE"
+    # Set encoding parameters - Make sure to use strict utf8mb4
+    mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" "$db_name" -e "
+        SET NAMES utf8mb4;
+        SET character_set_client = utf8mb4;
+        SET character_set_connection = utf8mb4;
+        SET character_set_results = utf8mb4;
+        SET collation_connection = utf8mb4_unicode_ci;" 2>> "$LOG_FILE"
 }
 
-# Import the SQL file using various methods
+# Improved import_sql_file function with better encoding handling
 import_sql_file() {
     local db_name="$1"
     local sql_file="$2"
     local processed_file="$3"
     
-    log_message "Attempting direct import with charset parameters for $db_name..."
+    log_message "Preparing to import $sql_file into database $db_name"
     
-    # Try direct import first with charset parameters
-    mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" --default-character-set=utf8mb4 "$db_name" -e "SOURCE $sql_file;" 2>> "$LOG_FILE"
+    # First, analyze the file encoding
+    local file_encoding
+    if command -v file >/dev/null 2>&1; then
+        file_encoding=$(file -bi "$sql_file" | sed -e 's/.*charset=//')
+        log_message "Detected file encoding: $file_encoding"
+    else
+        file_encoding="unknown"
+        log_message "Could not detect file encoding (file command not available)"
+    fi
+    
+    # Process the SQL file with encoding fixes - convert to UTF-8 if needed
+    log_message "Converting file to UTF-8 with encoding fixes..."
+    
+    # Create a temporary directory for intermediary processed files
+    local tmp_process_dir="$TEMP_DIR/process_$db_name"
+    mkdir -p "$tmp_process_dir"
+    
+    # First step: Convert encoding to UTF-8 if needed
+    local utf8_file="$tmp_process_dir/utf8_converted.sql"
+    
+    if [ "$file_encoding" = "unknown" ] || [ "$file_encoding" = "utf-8" ] || [ "$file_encoding" = "us-ascii" ]; then
+        # File is already UTF-8 or ASCII (subset of UTF-8), just copy
+        cp "$sql_file" "$utf8_file"
+    else
+        # Try to convert to UTF-8
+        if command -v iconv >/dev/null 2>&1; then
+            log_message "Converting from $file_encoding to UTF-8 with iconv..."
+            if ! iconv -f "$file_encoding" -t UTF-8//TRANSLIT "$sql_file" > "$utf8_file" 2>> "$LOG_FILE"; then
+                log_message "Warning: iconv conversion failed, trying direct copy..."
+                cp "$sql_file" "$utf8_file"
+            fi
+        else
+            # No iconv available, just copy and hope for the best
+            log_message "Warning: iconv not available, using original file..."
+            cp "$sql_file" "$utf8_file"
+        fi
+    fi
+    
+    # Second step: Fix charset declarations and other issues
+    log_message "Applying charset fixes and other corrections..."
+    
+    # Process for charset declarations and other fixes
+    sed -e 's/utf8mb3/utf8mb4/g' \
+        -e 's/utf8/utf8mb4/g' \
+        -e 's/SET NAMES utf8;/SET NAMES utf8mb4;/g' \
+        -e 's/SET character_set_client = utf8;/SET character_set_client = utf8mb4;/g' \
+        -e 's/DEFAULT CHARSET=utf8/DEFAULT CHARSET=utf8mb4/g' \
+        -e 's/CHARSET=utf8/CHARSET=utf8mb4/g' \
+        -e 's/CHARACTER SET utf8/CHARACTER SET utf8mb4/g' \
+        -e 's/COLLATE=utf8_general_ci/COLLATE=utf8mb4_unicode_ci/g' \
+        -e 's/COLLATE utf8_general_ci/COLLATE utf8mb4_unicode_ci/g' \
+        -e 's/COLLATE=utf8_/COLLATE=utf8mb4_/g' \
+        -e 's/SET @saved_cs_client     = @@character_set_client/SET @saved_cs_client = @@character_set_client/g' \
+        -e 's/^\s*\\-/-- -/g' \
+        "$utf8_file" > "$processed_file"
+        
+    log_message "File processed for encoding issues. Attempting import..."
+    
+    # Try direct import with charset parameters
+    log_message "Attempting direct import with charset parameters for $db_name..."
+    mysql --default-character-set=utf8mb4 -u "$MYSQL_USER" -p"$MYSQL_PASS" "$db_name" < "$processed_file" 2>> "$LOG_FILE"
     
     # Check if import succeeded by counting tables
-    local table_count=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -N -e "SELECT COUNT(TABLE_NAME) FROM information_schema.tables WHERE table_schema = '$db_name';" 2>/dev/null)
+    local table_count
+    table_count=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -N -e "SELECT COUNT(TABLE_NAME) FROM information_schema.tables WHERE table_schema = '$db_name';" 2>/dev/null)
     
-    if [ "$table_count" -gt 0 ]; then
+    if [ -n "$table_count" ] && [ "$table_count" -gt 0 ]; then
         log_message "Import successful - $table_count tables created in $db_name"
+        
+        # Fix character set and collation for tables and columns
+        log_message "Fixing character sets and collations for tables and columns..."
+        
+        # Get list of all tables
+        local tables
+        tables=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -N -e "SHOW TABLES FROM \`$db_name\`;" 2>/dev/null)
+        
+        for table in $tables; do
+            # Convert table to utf8mb4
+            mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "ALTER TABLE \`$db_name\`.\`$table\` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>> "$LOG_FILE"
+            
+            # Get columns for this table
+            local columns
+            columns=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -N -e "SHOW COLUMNS FROM \`$db_name\`.\`$table\`;" 2>/dev/null | awk '{print $1}')
+            
+            # For each column of type CHAR, VARCHAR, TEXT, etc., convert to utf8mb4
+            for column in $columns; do
+                # Check if column is of string type
+                local column_type
+                column_type=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -N -e "SELECT DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$db_name' AND TABLE_NAME='$table' AND COLUMN_NAME='$column';" 2>/dev/null)
+                
+                # If column is a string type, modify it to utf8mb4
+                if [[ "$column_type" == "char" || "$column_type" == "varchar" || "$column_type" == "text" || 
+                      "$column_type" == "tinytext" || "$column_type" == "mediumtext" || "$column_type" == "longtext" || 
+                      "$column_type" == "enum" || "$column_type" == "set" ]]; then
+                    # Get the column definition
+                    local column_def
+                    column_def=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -N -e "SHOW FULL COLUMNS FROM \`$db_name\`.\`$table\` WHERE Field='$column';" 2>/dev/null | awk '{print $2}')
+                    
+                    # Modify column to use utf8mb4
+                    mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "ALTER TABLE \`$db_name\`.\`$table\` MODIFY COLUMN \`$column\` $column_def CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>> "$LOG_FILE"
+                fi
+            done
+        done
+        
+        log_message "Character set and collation fixes completed for all tables in $db_name"
         return 0
     fi
     
-    log_message "Direct import failed, trying alternative method..."
+    log_message "Direct import failed, trying alternative import method..."
     
-    # Process the SQL file - replacing charset definitions and handling other issues
-    sed -e 's/utf8mb3/utf8mb4/g' \
-        -e 's/SET @saved_cs_client     = @@character_set_client/SET @saved_cs_client = @@character_set_client/g' \
-        -e 's/^\s*\\-/-- -/g' \
-        "$sql_file" > "$processed_file"
-    
-    # Try the processed file with the correct charset
-    log_message "Importing processed file for $db_name..."
-    mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" --default-character-set=utf8mb4 "$db_name" < "$processed_file" 2>> "$LOG_FILE"
+    # Try importing with source command
+    log_message "Attempting import with SOURCE command..."
+    mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" --default-character-set=utf8mb4 "$db_name" -e "SOURCE $processed_file;" 2>> "$LOG_FILE"
     
     # Check again
     table_count=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -N -e "SELECT COUNT(TABLE_NAME) FROM information_schema.tables WHERE table_schema = '$db_name';" 2>/dev/null)
     
-    if [ "$table_count" -gt 0 ]; then
-        log_message "Processed import successful - $table_count tables created in $db_name"
+    if [ -n "$table_count" ] && [ "$table_count" -gt 0 ]; then
+        log_message "Import via SOURCE command successful - $table_count tables created in $db_name"
+        
+        # Fix character set and collation for tables and columns
+        log_message "Fixing character sets and collations for tables and columns..."
+        
+        # Get list of all tables
+        local tables
+        tables=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -N -e "SHOW TABLES FROM \`$db_name\`;" 2>/dev/null)
+        
+        for table in $tables; do
+            # Convert table to utf8mb4
+            mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "ALTER TABLE \`$db_name\`.\`$table\` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>> "$LOG_FILE"
+        done
+        
+        log_message "Character set and collation fixes completed for all tables in $db_name"
         return 0
     fi
     
@@ -1532,10 +2078,24 @@ import_sql_file() {
     
     table_count=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -N -e "SELECT COUNT(TABLE_NAME) FROM information_schema.tables WHERE table_schema = '$db_name';" 2>/dev/null)
     
-    if [ "$table_count" -gt 0 ]; then
+    if [ -n "$table_count" ] && [ "$table_count" -gt 0 ]; then
         log_message "Final import attempt successful - $table_count tables created in $db_name"
+        
+        # Fix character set and collation for tables and columns
+        log_message "Fixing character sets and collations for tables and columns..."
+        
+        # Get list of all tables
+        local tables
+        tables=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -N -e "SHOW TABLES FROM \`$db_name\`;" 2>/dev/null)
+        
+        for table in $tables; do
+            # Convert table to utf8mb4
+            mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "ALTER TABLE \`$db_name\`.\`$table\` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>> "$LOG_FILE"
+        done
+        
+        log_message "Character set and collation fixes completed for all tables in $db_name"
         return 0
-    else
+     else {
         log_message "All import methods failed for $db_name"
         log_message "Manual inspection required:"
         log_message "mysql -u root -p --default-character-set=utf8mb4"
@@ -1543,6 +2103,7 @@ import_sql_file() {
         log_message "USE $db_name;"
         log_message "SOURCE $sql_file;"
         return 1
+    }
     fi
 }
 
@@ -1702,6 +2263,305 @@ start_import_process() {
     wait
 }
 
+# Transfer and replace a single database
+transfer_replace_database() {
+    if [ -z "$MYSQL_USER" ] || [ -z "$MYSQL_PASS" ]; then
+        dialog --colors --title "Missing Credentials" --msgbox "\Z1MySQL credentials not configured.\n\nPlease set your MySQL username and password first." 8 60
+        configure_settings
+        return
+    fi
+
+    # Step 1: Select the source SQL file
+    if [ -z "$SQL_DIR" ] || [ ! -d "$SQL_DIR" ]; then
+        dialog --colors --title "No Directory Selected" --msgbox "\Z1No SQL directory selected. Please select a directory first." 8 60
+        browse_directories
+        
+        if [ -z "$SQL_DIR" ] || [ ! -d "$SQL_DIR" ]; then
+            return
+        fi
+    fi
+
+    # Get list of SQL files in the directory
+    local sql_files=()
+    local i=1
+    
+    while IFS= read -r file; do
+        if [ -f "$file" ]; then
+            local filename="${file##*/}"
+            sql_files+=("$file" "[$i] \Z6$filename\Z0")
+            ((i++))
+        fi
+    done < <(find "$SQL_DIR" -maxdepth 1 -type f -name "$SQL_PATTERN" | sort)
+    
+    if [ ${#sql_files[@]} -eq 0 ]; then
+        dialog --colors --title "No SQL Files Found" --msgbox "\Z1No SQL files matching pattern '$SQL_PATTERN' found in $SQL_DIR." 8 60
+        return
+fi
+    
+    # Select a single SQL file
+    local selected_file
+    selected_file=$(dialog --colors --clear --backtitle "\Z6SDBTT - Transfer Database\Z0" \
+        --title "Select Source SQL File" \
+        --menu "Select the SQL file to import:" 20 76 12 \
+        "${sql_files[@]}" 3>&1 1>&2 2>&3)
+    
+    if [ -z "$selected_file" ]; then
+        return
+    fi
+    
+    # Extract original database name from filename
+    local filename=$(basename "$selected_file")
+    local base_filename="${filename%.sql}"
+    
+    # Step 2: Select MySQL user to own the database
+    # Get list of MySQL users
+    local users
+    users=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "SELECT User FROM mysql.user WHERE User NOT IN ('root', 'debian-sys-maint', 'mysql.sys', 'mysql.session', 'mysql.infoschema');" 2>/dev/null | grep -v "User")
+    
+    if [ -z "$users" ]; then
+        dialog --colors --title "No MySQL Users" --msgbox "\Z1No MySQL users found. Would you like to create a MySQL user first?" 8 60
+        local create_user_choice
+        create_user_choice=$(dialog --colors --title "Create MySQL User" --yesno "Would you like to create a new MySQL user first?" 8 60)
+        
+        if [ $? -eq 0 ]; then
+            create_mysql_user
+            # Try again to get users
+            users=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "SELECT User FROM mysql.user WHERE User NOT IN ('root', 'debian-sys-maint', 'mysql.sys', 'mysql.session', 'mysql.infoschema');" 2>/dev/null | grep -v "User")
+            
+            if [ -z "$users" ]; then
+                dialog --colors --title "Error" --msgbox "\Z1Still no MySQL users found. Using root as owner." 8 60
+                DB_OWNER="root"
+            fi
+        else
+            dialog --colors --title "Using Root" --msgbox "\Z1Using root as the database owner." 8 60
+            DB_OWNER="root"
+        fi
+fi
+    
+    if [ -n "$users" ]; then
+        # Create options for user selection
+        local user_options=()
+        for user in $users; do
+            user_options+=("$user" "MySQL user: $user")
+        done
+        
+        # Add root as an option
+        user_options+=("root" "MySQL user: root (system administrator)")
+        
+        # Select user
+        local selected_user
+        selected_user=$(dialog --colors --title "Select MySQL User" --menu "Select MySQL user to own the database:" 15 60 8 "${user_options[@]}" 3>&1 1>&2 2>&3)
+        
+        if [ -z "$selected_user" ]; then
+            return
+fi
+        
+        DB_OWNER="$selected_user"
+fi
+    
+    # Step 3: Choose whether to create a new database or replace existing one
+    local db_options=()
+    
+    # Add option for new database with generated name
+    local suggested_name="${DB_PREFIX}${base_filename}"
+    db_options+=("new" "Create new database: \Z5$suggested_name\Z0")
+    
+    # Get list of existing databases
+    local databases
+    databases=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "SHOW DATABASES;" 2>/dev/null | grep -v -E "^(Database|information_schema|performance_schema|mysql|sys)$")
+    
+    if [ -n "$databases" ]; then
+        # Add option to select existing database to replace
+        db_options+=("replace" "Replace an existing database")
+fi
+    
+    # Add option for custom name
+    db_options+=("custom" "Use a custom database name")
+    
+    # Select database option
+    local db_option
+    db_option=$(dialog --colors --title "Database Operation" --menu "Choose database operation:" 15 60 8 "${db_options[@]}" 3>&1 1>&2 2>&3)
+    
+    if [ -z "$db_option" ]; then
+        return
+    fi
+    
+    local target_db_name=""
+    
+    case $db_option in
+        "new")
+            target_db_name="$suggested_name"
+            ;;
+        "replace")
+            # Create options for database selection
+            local existing_db_options=()
+            for db in $databases; do
+                existing_db_options+=("$db" "Database: $db")
+            done
+            
+            # Select database
+            local selected_db
+            selected_db=$(dialog --colors --title "Select Database to Replace" --menu "Select database to replace:" 15 60 8 "${existing_db_options[@]}" 3>&1 1>&2 2>&3)
+            
+            if [ -z "$selected_db" ]; then
+                return
+fi
+            
+            # Confirm replacement
+            dialog --colors --title "Confirm Database Replacement" --yesno "\Z1Are you sure you want to replace the database '$selected_db'?\n\nThis will DELETE all data in this database and replace it with the content from $filename.\n\nThis action cannot be undone!" 12 70
+            
+            if [ $? -ne 0 ]; then
+                return
+fi
+            
+            target_db_name="$selected_db"
+            ;;
+        "custom")
+            # Get custom database name
+            target_db_name=$(dialog --colors --title "Custom Database Name" --inputbox "Enter custom database name:" 8 60 "$suggested_name" 3>&1 1>&2 2>&3)
+            
+            if [ -z "$target_db_name" ]; then
+                return
+fi
+            ;;
+    esac
+    
+    # Show transfer plan
+    local plan="\Z5Transfer Plan Summary:\Z0\n\n"
+    plan+="Source SQL file: \Z6$filename\Z0\n"
+    plan+="Target database: \Z6$target_db_name\Z0\n"
+    plan+="Database owner: \Z6$DB_OWNER\Z0\n\n"
+    
+    if [ "$db_option" = "replace" ]; then
+        plan+="\Z1WARNING: The existing database '$target_db_name' will be dropped and replaced!\Z0\n\n"
+    fi
+    
+    plan+="\Z6The transfer process will:\Z0\n"
+    plan+="1. Drop the target database if it exists\n"
+    plan+="2. Create a new database with utf8mb4 charset\n"
+    plan+="3. Import data from the SQL file\n"
+    plan+="4. Fix character encoding issues\n"
+    plan+="5. Grant privileges to \Z5$DB_OWNER\Z0 user\n\n"
+    plan+="Logs will be saved to \Z6$LOG_FILE\Z0"
+    
+    dialog --colors --title "Transfer Plan" --yesno "$plan\n\nProceed with transfer?" 20 76
+    
+    if [ $? -ne 0 ]; then
+        return
+fi
+    
+    # Initialize log files
+    echo "Starting database transfer process at $(date)" > "$LOG_FILE"
+    echo "MySQL user: $MYSQL_USER" >> "$LOG_FILE"
+    echo "Database owner: $DB_OWNER" >> "$LOG_FILE"
+    echo "Source SQL file: $filename" >> "$LOG_FILE"
+    echo "Target database: $target_db_name" >> "$LOG_FILE"
+    echo "----------------------------------------" >> "$LOG_FILE"
+    
+    # Create a display log file for the UI
+    echo "Starting database transfer process at $(date)" > "$DISPLAY_LOG_FILE"
+    echo "----------------------------------------" >> "$DISPLAY_LOG_FILE"
+    
+    # Create temp directory if it doesn't exist
+    mkdir -p "$TEMP_DIR"
+    
+    # Show progress
+    dialog --title "Transfer Progress" --gauge "Preparing to transfer database..." 10 70 0 &
+    local gauge_pid=$!
+    
+    # Background process for the actual transfer
+    {
+        # Update progress - 10%
+        echo 10 | dialog --title "Transfer Progress" \
+               --gauge "Creating target database..." 10 70 10 \
+               2>/dev/null
+        
+        # Create the database
+        log_message "Creating target database: $target_db_name with utf8mb4 charset"
+        create_database "$target_db_name"
+        
+        # Update progress - 30%
+        echo 30 | dialog --title "Transfer Progress" \
+               --gauge "Importing database content..." 10 70 30 \
+               2>/dev/null
+        
+        # Create a processed version with standardized charset
+        local processed_file="$TEMP_DIR/processed_$filename"
+        
+        # Import the SQL file
+        if import_sql_file "$target_db_name" "$selected_file" "$processed_file"; then
+            # Update progress - 70%
+            echo 70 | dialog --title "Transfer Progress" \
+                   --gauge "Granting privileges to $DB_OWNER..." 10 70 70 \
+                   2>/dev/null
+            
+            # Grant privileges
+            grant_privileges "$target_db_name" "$DB_OWNER"
+            
+            # Update progress - 90%
+            echo 90 | dialog --title "Transfer Progress" \
+                   --gauge "Finalizing transfer..." 10 70 90 \
+                   2>/dev/null
+            
+            # Flush privileges
+            log_message "Flushing privileges..."
+            mysql -u "$MYSQL_USER" -p"$MYSQL_PASS" -e "FLUSH PRIVILEGES;" 2>> "$LOG_FILE"
+            
+            # Clean up temporary files
+            log_message "Cleaning up temporary files..."
+            rm -rf "$TEMP_DIR"
+            
+            log_message "Database transfer completed successfully"
+            log_message "------------------------"
+            
+            # Final progress update - 100%
+            echo 100 | dialog --title "Transfer Progress" \
+                   --gauge "Transfer completed!" 10 70 100 \
+                   2>/dev/null
+            
+            # Give time to see the final state
+            sleep 2
+            
+            # Kill the dialog process
+            kill $gauge_pid 2>/dev/null || true
+            
+            # Show the result summary
+            dialog --colors --title "Transfer Complete" --msgbox "\Z6Database transfer completed successfully.\n\nSource SQL file: \Z5$filename\Z0\nTarget database: \Z5$target_db_name\Z0\nDatabase owner: \Z5$DB_OWNER\Z0\n\nLog file saved to: \Z5$LOG_FILE\Z0" 12 70
+        else
+            # Update progress - error state
+            echo 100 | dialog --title "Transfer Progress" \
+                   --gauge "Transfer failed!" 10 70 100 \
+                   2>/dev/null
+            
+            # Clean up temporary files
+            log_message "Cleaning up temporary files..."
+            rm -rf "$TEMP_DIR"
+            
+            log_message "Database transfer failed"
+            log_message "------------------------"
+            
+            # Give time to see the final state
+            sleep 2
+            
+            # Kill the dialog process
+            kill $gauge_pid 2>/dev/null || true
+            
+            # Show error message
+            dialog --colors --title "Transfer Failed" --msgbox "\Z1Database transfer failed.\n\nPlease check the log file for more details: \Z5$LOG_FILE\Z0" 8 70
+            
+            # Show the log
+            dialog --colors --title "Transfer Log" --textbox "$LOG_FILE" 20 76
+        fi
+        
+        # Clean up
+        rm -f "$DISPLAY_LOG_FILE"
+        
+    } &
+    
+    # Wait for the background process to complete
+    wait
+}
+
 # Select from previously used directories with enhanced theming
 select_from_recent_dirs() {
     if [ -z "$LAST_DIRECTORIES" ]; then
@@ -1791,7 +2651,7 @@ view_logs() {
             
             # View log file with enhanced formatting
             # Process the log file to add color to key events
-            local temp_log="/tmp/sdbtt_colored_log_$$"
+            local temp_log="/tmp/sdbtt_colored_log_$"
             cat "$selection" | 
                 sed 's/\[ERROR\]/\\Z1[ERROR]\\Z0/g' | 
                 sed 's/\[WARNING\]/\\Z3[WARNING]\\Z0/g' |
@@ -1821,10 +2681,12 @@ This tool helps you import MySQL databases from SQL files with the following fea
 \Z6* Interactive TUI with enhanced Retrowave theme
 * Directory navigation and selection 
 * Configuration management with secure password storage
-* Automatic charset conversion
+* Automatic charset conversion and fixing Persian/Arabic text
 * Multiple import methods for compatibility
 * Prefix replacement
 * MySQL administration tools
+* MySQL user management
+* Database transfer and replacement
 * Privilege management\Z0
 
 \Z5How to use this tool:\Z0
@@ -1849,6 +2711,11 @@ This tool helps you import MySQL databases from SQL files with the following fea
 * No plaintext passwords in config files
 
 The tool saves your settings for future use and keeps logs of all operations.
+
+\Z5Character Encoding Support:\Z0
+* Properly handles UTF-8 and UTF-8MB4 encoding
+* Automatically detects and fixes encoding issues
+* Ensures proper display of Persian, Arabic, and other non-Latin scripts
 " 25 78
 }
 
