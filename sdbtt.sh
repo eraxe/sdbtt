@@ -476,15 +476,21 @@ EOF
     return 0
 }
 
+
 # Enhanced update function with better UI feedback
-# Enhanced update function with better UI feedback and version detection
 update_script() {
     local temp_dir="/tmp/sdbtt_update_$(date +%s)"
     local current_dir=$(pwd)
     local update_log="$temp_dir/update.log"
     
-    # Create the update log file with timestamp
+    # Ensure we start with a clean directory
+    if [ -d "$temp_dir" ]; then
+        rm -rf "$temp_dir"
+    fi
+    
+    # Create fresh temporary directory
     mkdir -p "$temp_dir"
+    local update_log="$temp_dir/update.log"
     echo "[$(date)] Starting update process..." > "$update_log"
     
     # Create a tailbox for live update progress
@@ -503,7 +509,9 @@ update_script() {
         }
         
         echo "[$(date)] Cloning repository..." >> "$update_log"
-        if ! git clone "$REPO_URL" . >>$update_log 2>&1; then
+
+        # Clone the repository
+        if ! git clone "$REPO_URL" repo 2>>$update_log; then
             echo "[$(date)] ERROR: Failed to clone repository. Check your internet connection and try again." >> "$update_log"
             sleep 3
             kill $dialog_pid 2>/dev/null
@@ -513,94 +521,56 @@ update_script() {
             return 1
         fi
         
-        # Check if there's a newer version - ENHANCED VERSION DETECTION
-        echo "[$(date)] Checking version information..." >> "$update_log"
-        
-        # Multiple detection methods for better reliability
-        REPO_VERSION=""
-        
-        # Method 1: Check for VERSION file
-        if [ -f "VERSION" ]; then
-            REPO_VERSION=$(cat VERSION)
-            echo "[$(date)] Found explicit VERSION file: $REPO_VERSION" >> "$update_log"
-        fi
-        
-        # Method 2: Look for VERSION= in sdbtt script with double quotes
-        if [ -z "$REPO_VERSION" ] && [ -f "sdbtt" ]; then
-            REPO_VERSION=$(grep -m 1 "^VERSION=\"" sdbtt | cut -d'"' -f2)
-            if [ -n "$REPO_VERSION" ]; then
-                echo "[$(date)] Extracted version from script (double quotes): $REPO_VERSION" >> "$update_log"
-            fi
-        fi
-        
-        # Method 3: Look for VERSION= in sdbtt script with single quotes
-        if [ -z "$REPO_VERSION" ] && [ -f "sdbtt" ]; then
-            REPO_VERSION=$(grep -m 1 "^VERSION='" sdbtt | cut -d"'" -f2)
-            if [ -n "$REPO_VERSION" ]; then
-                echo "[$(date)] Extracted version from script (single quotes): $REPO_VERSION" >> "$update_log"
-            fi
-        fi
-        
-        # Method 4: Look for VERSION= without quotes
-        if [ -z "$REPO_VERSION" ] && [ -f "sdbtt" ]; then
-            REPO_VERSION=$(grep -m 1 "^VERSION=" sdbtt | sed 's/^VERSION=//g')
-            if [ -n "$REPO_VERSION" ]; then
-                echo "[$(date)] Extracted version from script (no quotes): $REPO_VERSION" >> "$update_log"
-            fi
-        fi
-        
-        # Method 5: Check for version string in the header
-        if [ -z "$REPO_VERSION" ] && [ -f "sdbtt" ]; then
-            REPO_VERSION=$(grep -m 1 "Version: [0-9]*\.[0-9]*\.[0-9]*" sdbtt | sed 's/.*Version: //g')
-            if [ -n "$REPO_VERSION" ]; then
-                echo "[$(date)] Extracted version from header comment: $REPO_VERSION" >> "$update_log"
-            fi
-        fi
-        
-        # Log all files to help with debugging
-        echo "[$(date)] Files in repository:" >> "$update_log"
-        ls -la >> "$update_log" 2>&1
-        
-        if [ -z "$REPO_VERSION" ]; then
-            echo "[$(date)] ERROR: Could not determine repository version using multiple methods." >> "$update_log"
-            echo "[$(date)] Dumping first 20 lines of sdbtt file to aid debugging:" >> "$update_log"
-            head -n 20 sdbtt >> "$update_log" 2>&1 || echo "Could not read sdbtt file" >> "$update_log"
-            
+        # Change into the cloned repository directory
+        cd repo || {
+            echo "[$(date)] ERROR: Failed to access repository directory" >> "$update_log"
             sleep 2
             kill $dialog_pid 2>/dev/null
             cd "$current_dir" || true
-            dialog --colors --title "Update Failed" --msgbox "\Z1Could not determine repository version. Please report this issue to the developer." 8 60
+            dialog --colors --title "Update Failed" --msgbox "\Z1Failed to access cloned repository." 8 60
             rm -rf "$temp_dir"
             return 1
-        fi
-        
-        # Compare versions
-        echo "[$(date)] Comparing versions - Current: $VERSION, Repository: $REPO_VERSION" >> "$update_log"
-        
-        if [ "$VERSION" = "$REPO_VERSION" ]; then
-            echo "[$(date)] Your version ($VERSION) is already up to date." >> "$update_log"
-            sleep 2
-            kill $dialog_pid 2>/dev/null
-            cd "$current_dir" || true
-            dialog --colors --title "No Updates" --msgbox "\Z6Your version ($VERSION) is already up to date." 8 60
-            rm -rf "$temp_dir"
-            return 0
-        fi
-        
+        }
+
         # Kill tailbox before asking for confirmation
         sleep 1
         kill $dialog_pid 2>/dev/null
-        
-        # Confirm update
-        dialog --colors --title "Update Available" --yesno "\Z6A new version is available.\n\nCurrent version: $VERSION\nNew version: $REPO_VERSION\n\nDo you want to update?" 10 60
-        
+
+        # Confirm update - simplified message
+        dialog --colors --title "Update Confirmation" --yesno "\Z6Do you want to update SDBTT to the latest version?\n\nThis will replace your current version with the latest from GitHub." 10 60
+
         if [ $? -eq 0 ]; then
-            # Use simpler display during update to avoid dialog issues
+            # User confirmed update
             echo "[$(date)] User confirmed update. Proceeding with installation..." > "$update_log"
             echo "Installing update, please wait..."
+
+            # Find the main script file
+            local script_file=""
+            if [ -f "sdbtt" ]; then
+                script_file="sdbtt"
+            elif [ -f "sdbtt.sh" ]; then
+                script_file="sdbtt.sh"
+            else
+                # Look for any shell script
+                for file in *.sh; do
+                    if [ -f "$file" ]; then
+                        script_file="$file"
+                        break
+                    fi
+                done
+            fi
+
+            if [ -z "$script_file" ]; then
+                echo "[$(date)] ERROR: Could not find main script file in repository" >> "$update_log"
+                dialog --colors --title "Update Failed" --msgbox "\Z1Could not find main script file in repository." 8 60
+                cd "$current_dir" || true
+                rm -rf "$temp_dir"
+                return 1
+            fi
             
             # Update the script
-            echo "[$(date)] Checking installation method..." >> "$update_log"
+            echo "[$(date)] Found script file: $script_file" >> "$update_log"
+
             if [ -f "/usr/local/bin/sdbtt" ]; then
                 echo "[$(date)] Detected system installation." >> "$update_log"
                 if [ "$(id -u)" -ne 0 ]; then
@@ -612,46 +582,24 @@ update_script() {
                 fi
                 
                 echo "[$(date)] Updating system installation..." >> "$update_log"
-                cp "sdbtt" "/usr/local/bin/sdbtt" >> "$update_log" 2>&1
+                cp "$script_file" "/usr/local/bin/sdbtt" >> "$update_log" 2>&1
                 chmod 755 "/usr/local/bin/sdbtt" >> "$update_log" 2>&1
                 echo "[$(date)] System installation updated successfully." >> "$update_log"
             else
                 echo "[$(date)] Updating current script..." >> "$update_log"
-                cp "sdbtt" "$0" >> "$update_log" 2>&1
+                cp "$script_file" "$0" >> "$update_log" 2>&1
                 chmod 755 "$0" >> "$update_log" 2>&1
                 echo "[$(date)] Script updated successfully." >> "$update_log"
             fi
             
-            # Update changelog information
-            if [ -f "CHANGELOG.md" ]; then
-                echo "[$(date)] Found changelog file. Extracting changes..." >> "$update_log"
-                echo "[$(date)] Changes in version $REPO_VERSION:" >> "$update_log"
-                grep -A 10 "## \[$REPO_VERSION\]" "CHANGELOG.md" >> "$update_log" 2>/dev/null || echo "No detailed changelog found for this version." >> "$update_log"
-            else
-                echo "[$(date)] No changelog found." >> "$update_log"
-            fi
-            
-            sleep 2
-            kill $install_dialog_pid 2>/dev/null
-            
-            # Extract a simple changelog to show to the user
-            local changelog=""
-            if [ -f "CHANGELOG.md" ]; then
-                changelog=$(grep -A 10 "## \[$REPO_VERSION\]" "CHANGELOG.md" 2>/dev/null)
-            fi
-            
-            if [ -n "$changelog" ]; then
-                dialog --colors --title "Update Successful" --msgbox "\Z6Updated from version $VERSION to $REPO_VERSION.\n\nChanges in this version:\n$changelog\n\nPlease restart the script for changes to take effect." 16 70
-            else
-                dialog --colors --title "Update Successful" --msgbox "\Z6Updated from version $VERSION to $REPO_VERSION.\n\nPlease restart the script for changes to take effect." 10 60
-            fi
+            dialog --colors --title "Update Successful" --msgbox "\Z6SDBTT has been updated to the latest version.\n\nPlease restart the script for changes to take effect." 10 60
             
             # Cleanup and exit
             rm -rf "$temp_dir"
             cd "$current_dir" || true
             exit 0
         else
-            dialog --colors --title "Update Cancelled" --msgbox "\Z6Update cancelled. Keeping version $VERSION." 8 60
+            dialog --colors --title "Update Cancelled" --msgbox "\Z6Update cancelled." 8 60
             rm -rf "$temp_dir"
             cd "$current_dir" || true
             return 0
@@ -669,82 +617,17 @@ update_script() {
     return 0
 }
 
-# Remove the script from the system
-remove_script() {
-    local script_path="/usr/local/bin/sdbtt"
-    local conf_dir="/etc/sdbtt"
-    
-    # Check if running with sudo/root
-    if [ "$(id -u)" -ne 0 ]; then
-        dialog --colors --title "Error" --msgbox "\Z1Removal requires root privileges. Please run with sudo." 8 60
-        return 1
-    fi
-    
-    # Confirm removal
-    dialog --colors --title "Remove SDBTT" --yesno "\Z1Are you sure you want to remove SDBTT from your system?\n\nThis will delete:\n- $script_path\n- $conf_dir\n\nYour personal configuration in $CONFIG_DIR will not be removed." 12 70
+# Simplified check for updates function
+check_for_updates() {
+    dialog --colors --title "Check for Updates" --yesno "\Z6Would you like to check for and download the latest version of SDBTT from GitHub?\n\nThis will replace your current version with the latest available." 10 70
     
     if [ $? -eq 0 ]; then
-        # Remove script and config
-        rm -f "$script_path"
-        rm -rf "$conf_dir"
-        
-        dialog --colors --title "Removal Complete" --msgbox "\Z6SDBTT has been removed from your system.\n\nYour personal configuration in $CONFIG_DIR has been kept.\nTo remove it completely, delete this directory manually." 10 70
-        return 0
-    else
-        dialog --colors --title "Removal Cancelled" --msgbox "\Z6Removal cancelled." 8 60
-        return 0
-    fi
-}
-
-# Check for updates and notify user
-check_for_updates() {
-    dialog --colors --title "Checking for Updates" --infobox "\Z6Checking for updates from $REPO_URL..." 5 60
-    
-    # Create temp directory
-    local temp_dir="/tmp/sdbtt_update_check_$(date +%s)"
-    mkdir -p "$temp_dir"
-    cd "$temp_dir" || return 1
-    
-    # Silent clone or fetch latest version info
-    if ! git clone --depth 1 "$REPO_URL" . >/dev/null 2>&1; then
-        dialog --colors --title "Update Check Failed" --msgbox "\Z1Failed to check for updates. Check your internet connection and try again." 8 60
-        rm -rf "$temp_dir"
-        return 1
-    fi
-    
-    # Get latest version
-    local REPO_VERSION=""
-    if [ -f "VERSION" ]; then
-        REPO_VERSION=$(cat VERSION)
-    else
-        REPO_VERSION=$(grep "^VERSION=" sdbtt | cut -d'"' -f2)
-    fi
-    
-    # Clean up
-    cd - >/dev/null
-    rm -rf "$temp_dir"
-    
-    if [ -z "$REPO_VERSION" ]; then
-        dialog --colors --title "Update Check Failed" --msgbox "\Z1Could not determine repository version." 8 60
-        return 1
-    fi
-    
-    # Compare versions
-    if [ "$VERSION" = "$REPO_VERSION" ]; then
-        dialog --colors --title "No Updates" --msgbox "\Z6Your version ($VERSION) is already up to date." 8 60
-        return 0
-    else
-        dialog --colors --title "Update Available" --yesno "\Z6A new version is available.\n\nCurrent version: $VERSION\nNew version: $REPO_VERSION\n\nDo you want to update now?" 10 60
-        
-        if [ $? -eq 0 ]; then
-            update_script
-            return $?
-        fi
+        update_script
+        return $?
     fi
     
     return 0
 }
-
 # Display the about information with enhanced colors
 show_about() {
     dialog --colors --title "About SDBTT" --msgbox "\
