@@ -1,7 +1,7 @@
 #!/bin/bash
 # SDBTT: Simple Database Transfer Tool
 # Enhanced MySQL Database Import Script with Retrowave Theme
-# Version: 1.1.0
+# Version: 1.2.0
 
 # Default configuration
 CONFIG_DIR="$HOME/.sdbtt"
